@@ -42,12 +42,7 @@ jobs:
         id: build_changelog
         run: |
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREV_TAG" ]; then
-            git log -n 10 --oneline | while read line; do echo "- $line"; done >> $GITHUB_OUTPUT
-          else
-            git log ${PREV_TAG}..HEAD --oneline | while read line; do echo "- $line"; done >> $GITHUB_OUTPUT
-          fi
+          git log -n 5 --oneline | while read line; do echo "- $line"; done >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
