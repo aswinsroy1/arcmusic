@@ -38,12 +38,6 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-configuration-cache
 
-      - name: Extract Version Name
-        id: extract_version
-        run: |
-          VERSION_NAME=${GITHUB_REF#refs/tags/v}
-          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
-
       - name: Generate Changelog
         id: build_changelog
         run: |
@@ -54,9 +48,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Release v${{ env.VERSION_NAME }}"
+          name: "Release ${{ github.ref_name }}"
           body: |
-            ### 🚀 What's New in v${{ env.VERSION_NAME }}
+            ### 🚀 What's New in ${{ github.ref_name }}
             ${{ steps.build_changelog.outputs.changelog }}
             
             ### 📦 Packages
