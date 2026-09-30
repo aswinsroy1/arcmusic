@@ -12,6 +12,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aeswox.arcmusic.sharing.ShareScreen
 
+import com.aeswox.arcmusic.updater.UpdateManager
+import com.aeswox.arcmusic.updater.UpdateResult
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import android.app.AlertDialog
 import android.os.Bundle
 import androidx.compose.animation.*
 import androidx.compose.animation.togetherWith
@@ -159,6 +164,21 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         
+        lifecycleScope.launch {
+            val updateManager = UpdateManager(this@MainActivity)
+            val result = updateManager.checkForUpdates("aswinsroy1", "arcmusic")
+            if (result is UpdateResult.UpdateAvailable) {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Update Available!")
+                    .setMessage("Version ${result.version} is available.\n\n${result.changelog}")
+                    .setPositiveButton("Update") { _, _ ->
+                        updateManager.downloadAndInstall(result.downloadUrl, result.version)
+                    }
+                    .setNegativeButton("Later", null)
+                    .show()
+            }
+        }
+
         splashScreen.setKeepOnScreenCondition { keepSplashScreen }
         
         enableEdgeToEdge(
