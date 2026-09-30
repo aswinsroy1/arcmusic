@@ -39,20 +39,18 @@ jobs:
         run: ./gradlew assembleRelease --no-configuration-cache
 
       - name: Generate Changelog
-        id: build_changelog
         run: |
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          git log -n 5 --oneline | while read line; do echo "- $line"; done >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "### 🚀 What's New in ${{ github.ref_name }}" > changelog.txt
+          git log -n 5 --oneline | while read line; do echo "- $line"; done >> changelog.txt
+          echo "" >> changelog.txt
+          echo "### 📦 Packages" >> changelog.txt
+          echo "The updater built into the app will automatically pick the best version for your device. If downloading manually and unsure, download the **universal** APK." >> changelog.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "Release ${{ github.ref_name }}"
-          body: |
-            ### 🚀 What's New in ${{ github.ref_name }}
-            ${{ steps.build_changelog.outputs.changelog }}
-            
-            ### 📦 Packages
-            The updater built into the app will automatically pick the best version for your device. If downloading manually and unsure, download the **universal** APK.
-          files: app/build/outputs/apk/release/*.apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --notes-file changelog.txt \
+            app/build/outputs/apk/release/*.apk
