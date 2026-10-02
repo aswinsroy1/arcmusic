@@ -41,7 +41,12 @@ jobs:
       - name: Generate Changelog
         run: |
           echo "### 🚀 What's New in ${{ github.ref_name }}" > changelog.txt
-          git log -n 5 --oneline | while read line; do echo "- $line"; done >> changelog.txt
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            git log -n 5 --oneline | while read line; do echo "- $line"; done >> changelog.txt
+          else
+            git log ${PREV_TAG}..HEAD --oneline | while read line; do echo "- $line"; done >> changelog.txt
+          fi
           echo "" >> changelog.txt
           echo "### 📦 Packages" >> changelog.txt
           echo "The updater built into the app will automatically pick the best version for your device. If downloading manually and unsure, download the **universal** APK." >> changelog.txt
