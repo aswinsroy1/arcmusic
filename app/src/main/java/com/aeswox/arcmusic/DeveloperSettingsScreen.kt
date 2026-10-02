@@ -201,7 +201,7 @@ fun DeveloperSettingsScreen(
                     ),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)
                 )
             ) {
                 Column(
@@ -296,7 +296,7 @@ private fun DeveloperCard(
             .jellyClick { onClick() },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)
         )
     ) {
         Column(
@@ -363,7 +363,7 @@ private fun ExpandableSettingsCard(
             .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp))
             .clip(RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
     ) {
         Column {
             Row(
