@@ -93,6 +93,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     private val APP_ICON_VARIANT_KEY = stringPreferencesKey("app_icon_variant")
     private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
     private val DEVELOPER_OPTIONS_UNLOCKED_KEY = booleanPreferencesKey("developer_options_unlocked")
+    private val AUTO_UPDATE_ENABLED_KEY = booleanPreferencesKey("auto_update_enabled")
 
     val appIconVariant: Flow<AppIconVariant> = context.dataStore.data.map { preferences ->
         when (preferences[APP_ICON_VARIANT_KEY]) {
@@ -146,6 +147,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     
     val dynamicColorsEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[DYNAMIC_COLORS_ENABLED_KEY] ?: true
+    }
+
+    val autoUpdateEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[AUTO_UPDATE_ENABLED_KEY] ?: true
     }
     
     val developerOptionsUnlocked: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -316,7 +321,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     
     val coilDiskCacheLimitMb: Flow<Int> = context.dataStore.data.map {
-        it[COIL_DISK_CACHE_LIMIT_MB_KEY] ?: 250 // default 250MB
+        it[COIL_DISK_CACHE_LIMIT_MB_KEY] ?: 500 // default 500MB
     }
 
     suspend fun setMinSongDurationSec(value: Int) {
@@ -430,6 +435,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setDeveloperOptionsUnlocked(unlocked: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[DEVELOPER_OPTIONS_UNLOCKED_KEY] = unlocked
+        }
+    }
+
+    suspend fun setAutoUpdateEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[AUTO_UPDATE_ENABLED_KEY] = enabled
         }
     }
 

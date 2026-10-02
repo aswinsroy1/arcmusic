@@ -468,6 +468,14 @@ fun ArcNowPlayingScreen(
     val navScope = LocalNavAnimatedVisibilityScope.current
     val jiggleSettings = LocalJigglePhysicsSettings.current
 
+    var previousImageUrl by remember { mutableStateOf("") }
+    var activeImageUrl by remember { mutableStateOf(imageUrl) }
+
+    if (activeImageUrl != imageUrl) {
+        previousImageUrl = activeImageUrl
+        activeImageUrl = imageUrl
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -486,10 +494,29 @@ fun ArcNowPlayingScreen(
 
         Box(modifier = Modifier.fillMaxSize()) {
 
-            // Blurred background for the whole screen
+            // Render previous blurred background underneath
+            if (previousImageUrl.isNotEmpty() && previousImageUrl != activeImageUrl) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(previousImageUrl)
+                        .allowHardware(false)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().blur(80.dp)
+                )
+            }
+
+            // Current Blurred Background
+            var bgLoaded by remember(activeImageUrl) { mutableStateOf(false) }
+            val bgAlpha by animateFloatAsState(
+                targetValue = if (bgLoaded) 1f else 0f,
+                animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+                label = "bgAlpha"
+            )
+
             val bgImageRequest = ImageRequest.Builder(LocalContext.current)
-                .data(imageUrl)
-                .crossfade(800)
+                .data(activeImageUrl)
                 .allowHardware(false)
                 .build()
 
@@ -497,7 +524,9 @@ fun ArcNowPlayingScreen(
                 model = bgImageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().alpha(bgAlpha).blur(80.dp),
                     onSuccess = { state ->
+                        bgLoaded = true
                         val drawable = state.result.drawable
                         val bitmap = (drawable as? BitmapDrawable)?.bitmap
                         if (bitmap != null) {
@@ -536,10 +565,7 @@ fun ArcNowPlayingScreen(
                                 targetAccentColor = avgColor
                             }
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(80.dp)
+                    }
                 )
 
             
@@ -580,17 +606,38 @@ fun ArcNowPlayingScreen(
                         )
                     }
             ) {
-                // Static album art — always visible as base/fallback
+                // Previous Sharp Image
+                if (previousImageUrl.isNotEmpty() && previousImageUrl != activeImageUrl) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(previousImageUrl)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                // Current Sharp Image
+                var sharpLoaded by remember(activeImageUrl) { mutableStateOf(false) }
+                val sharpAlpha by animateFloatAsState(
+                    targetValue = if (sharpLoaded) 1f else 0f,
+                    animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+                    label = "sharpAlpha"
+                )
+
                 val sharpImageRequest = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .crossfade(800)
+                    .data(activeImageUrl)
                     .build()
 
                 AsyncImage(
                     model = sharpImageRequest,
                     contentDescription = "Album Art",
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().alpha(sharpAlpha),
+                    onSuccess = { 
+                        sharpLoaded = true 
+                    }
                 )
 
                 // Canvas artwork player â€” crossfades in over the static art

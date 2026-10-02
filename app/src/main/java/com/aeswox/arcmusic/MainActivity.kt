@@ -164,21 +164,6 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         
-        lifecycleScope.launch {
-            kotlinx.coroutines.delay(2000)
-            val updateManager = UpdateManager(this@MainActivity)
-            val result = updateManager.checkForUpdates("aswinsroy1", "arcmusic")
-            if (result is UpdateResult.UpdateAvailable) {
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Update Available!")
-                    .setMessage("Version ${result.version} is available.\n\n${result.changelog}")
-                    .setPositiveButton("Update") { _, _ ->
-                        updateManager.downloadAndInstall(result.downloadUrl, result.version)
-                    }
-                    .setNegativeButton("Later", null)
-                    .show()
-            }
-        }
 
         splashScreen.setKeepOnScreenCondition { keepSplashScreen }
         
@@ -235,6 +220,27 @@ class MainActivity : ComponentActivity() {
             val isLibraryLoaded by viewModel.isLibraryLoaded.collectAsState()
             val hasCompletedOnboarding by viewModel.hasCompletedOnboarding.collectAsState()
 
+            var updateResult by remember { mutableStateOf<com.aeswox.arcmusic.updater.UpdateResult?>(null) }
+            var downloadState by remember { mutableStateOf<com.aeswox.arcmusic.updater.DownloadState>(com.aeswox.arcmusic.updater.DownloadState.Idle) }
+            val updateManager = remember { com.aeswox.arcmusic.updater.UpdateManager(this@MainActivity) }
+            
+            val autoUpdateEnabled by viewModel.autoUpdateEnabled.collectAsState()
+
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(2000)
+                if (viewModel.autoUpdateEnabled.value) {
+                    val result = updateManager.checkForUpdates("aswinsroy1", "arcmusic")
+                    if (result is com.aeswox.arcmusic.updater.UpdateResult.UpdateAvailable) {
+                        updateResult = result
+                    }
+                }
+            }
+            
+            androidx.activity.compose.BackHandler(enabled = updateResult != null && downloadState == com.aeswox.arcmusic.updater.DownloadState.Idle) {
+                updateResult = null
+            }
+
+
             ArcMusicTheme(darkTheme = isDarkTheme) {
                 val baseBg = MaterialTheme.colorScheme.background
                 val appBackdrop = com.aeswox.arcmusic.backdrop.backdrops.rememberLayerBackdrop {
@@ -271,7 +277,9 @@ class MainActivity : ComponentActivity() {
                                 scaleX = homeScale
                                 scaleY = homeScale
                                 alpha = homeAlpha
-                            },
+                            }.then(
+                                if (updateResult != null) Modifier.blur(8.dp) else Modifier
+                            ),
                             containerColor = Color.Transparent,
                             contentColor = MaterialTheme.colorScheme.onBackground
                         ) { innerPadding ->
@@ -850,8 +858,6 @@ class MainActivity : ComponentActivity() {
                                     onLastFmApiKeyChange = { viewModel.setLastFmApiKey(it) },
                                     onFanartTvApiKeyChange = { viewModel.setFanartTvApiKey(it) },
                                     onGeminiApiKeyChange = { viewModel.setGeminiApiKey(it) },
-                                    coilDiskCacheLimitMb = coilDiskCacheLimitMb,
-                                    onCoilDiskCacheLimitMbChange = { viewModel.setCoilDiskCacheLimitMb(it) },
                                     onNavigateToWaveProperties = { navController.navigate("wave_properties") },
                                     onNavigateToJigglePhysics = { navController.navigate("jiggle_physics") },
                                     onNavigateToEqualizer = { navController.navigate("equalizer") },
@@ -882,7 +888,16 @@ class MainActivity : ComponentActivity() {
                                         viewModel.exportScanLog(context)
                                     },
                                     developerOptionsUnlocked = developerOptionsUnlocked,
-                                    onUnlockDeveloperOptions = { viewModel.setDeveloperOptionsUnlocked(true) }
+                                    onUnlockDeveloperOptions = { viewModel.setDeveloperOptionsUnlocked(true) },
+                                    autoUpdateEnabled = autoUpdateEnabled,
+                                    onAutoUpdateEnabledChange = { viewModel.setAutoUpdateEnabled(it) },
+                                    onCheckForUpdates = {
+                                        updateResult = com.aeswox.arcmusic.updater.UpdateResult.Checking
+                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                            val result = updateManager.checkForUpdates("aswinsroy1", "arcmusic")
+                                            updateResult = result
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -914,6 +929,7 @@ class MainActivity : ComponentActivity() {
                             val seekbarThumbRadius by viewModel.seekbarThumbRadius.collectAsState()
                             val seekbarUnplayedStroke by viewModel.seekbarUnplayedStroke.collectAsState()
                             val seekbarBloomDuration by viewModel.seekbarBloomDuration.collectAsState()
+                            val coilDiskCacheLimitMb by viewModel.coilDiskCacheLimitMb.collectAsState()
                             Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                                 DeveloperSettingsScreen(
                                     onNavigateBack = { navController.popBackStack() },
@@ -930,9 +946,11 @@ class MainActivity : ComponentActivity() {
                                     tintTransparency = tintTransparency,
                                     noiseFactor = noiseFactor,
                                     glowIntensity = glowIntensity,
+                                    coilDiskCacheLimitMb = coilDiskCacheLimitMb,
                                     onTintTransparencyChange = { viewModel.setTintTransparency(it) },
                                     onNoiseFactorChange = { viewModel.setNoiseFactor(it) },
                                     onGlowIntensityChange = { viewModel.setGlowIntensity(it) },
+                                    onCoilDiskCacheLimitMbChange = { viewModel.setCoilDiskCacheLimitMb(it) },
                                     physicsMass = physicsMass,
                                     physicsStiffness = physicsStiffness,
                                     physicsDampingRatio = physicsDampingRatio,
@@ -1290,6 +1308,28 @@ class MainActivity : ComponentActivity() {
                     } // end CompositionLocalProvider D
                 } // end SharedTransitionLayout C
             } // end Scaffold trailing lambda
+            
+            updateResult?.let { result ->
+                com.aeswox.arcmusic.components.UpdaterOverlay(
+                    isVisible = true,
+                    updateResult = result,
+                    downloadState = downloadState,
+                    onDismiss = { updateResult = null },
+                    onUpdateClick = { availableUpdate ->
+                        downloadState = com.aeswox.arcmusic.updater.DownloadState.Downloading(0f)
+                        updateManager.downloadAndInstall(
+                            url = availableUpdate.downloadUrl,
+                            version = availableUpdate.version,
+                            onProgress = { progress ->
+                                downloadState = com.aeswox.arcmusic.updater.DownloadState.Downloading(progress)
+                            },
+                            onCompleteCallback = {
+                                downloadState = com.aeswox.arcmusic.updater.DownloadState.ReadyToInstall
+                            }
+                        )
+                    }
+                )
+            }
             
             if (!isSplashDismissed) {
                 val splashAlpha = if (splashProgress.value > 1.8f) {

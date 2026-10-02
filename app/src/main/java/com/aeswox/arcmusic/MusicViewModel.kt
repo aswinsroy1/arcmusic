@@ -247,6 +247,9 @@ class MusicViewModel @Inject constructor(
     val developerOptionsUnlocked: StateFlow<Boolean> = settingsRepository.developerOptionsUnlocked
         .stateIn(viewModelScope, SharingStarted.Lazily, false)
 
+    val autoUpdateEnabled: StateFlow<Boolean> = settingsRepository.autoUpdateEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val libraryAlbums: StateFlow<List<Album>>
     val libraryArtists: StateFlow<List<Artist>>
     val libraryTracks: StateFlow<List<Track>>
@@ -287,6 +290,12 @@ class MusicViewModel @Inject constructor(
     fun setDeveloperOptionsUnlocked(unlocked: Boolean) {
         viewModelScope.launch {
             settingsRepository.setDeveloperOptionsUnlocked(unlocked)
+        }
+    }
+
+    fun setAutoUpdateEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoUpdateEnabled(enabled)
         }
     }
 

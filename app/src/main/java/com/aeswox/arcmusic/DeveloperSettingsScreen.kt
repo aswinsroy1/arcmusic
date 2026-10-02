@@ -49,9 +49,11 @@ fun DeveloperSettingsScreen(
     tintTransparency: Float,
     noiseFactor: Float,
     glowIntensity: Float,
+    coilDiskCacheLimitMb: Int,
     onTintTransparencyChange: (Float) -> Unit,
     onNoiseFactorChange: (Float) -> Unit,
     onGlowIntensityChange: (Float) -> Unit,
+    onCoilDiskCacheLimitMbChange: (Int) -> Unit,
     // Jiggle Physics
     physicsMass: Float,
     physicsStiffness: Float,
@@ -172,6 +174,23 @@ fun DeveloperSettingsScreen(
                 SliderRow("Thumb Radius (dp)", thumbRadius, onThumbRadiusChange, 0f..15f)
                 SliderRow("Unplayed Stroke (dp)", unplayedStroke, onUnplayedStrokeChange, 1f..10f)
                 SliderRow("Bloom Duration (ms)", bloomDuration, onBloomDurationChange, 100f..2000f)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Data & Storage
+            ExpandableSettingsCard(
+                title = "Data & Storage",
+                onReset = {
+                    onCoilDiskCacheLimitMbChange(500)
+                }
+            ) {
+                SliderRow(
+                    label = "Image Cache Limit",
+                    value = coilDiskCacheLimitMb.toFloat(),
+                    onValueChange = { onCoilDiskCacheLimitMbChange(it.toInt()) },
+                    valueRange = 250f..5000f,
+                    format = "%.0f MB"
+                )
             }
             Spacer(modifier = Modifier.height(12.dp))
 

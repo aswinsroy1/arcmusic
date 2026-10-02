@@ -14,6 +14,8 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.GET
@@ -105,7 +107,7 @@ class UpdateManager(private val context: Context) {
         return bestMatch ?: assets.firstOrNull { it.name.endsWith(".apk") }?.browser_download_url
     }
 
-    fun downloadAndInstall(url: String, version: String) {
+    fun downloadAndInstall(url: String, version: String, onProgress: (Float) -> Unit = {}, onCompleteCallback: () -> Unit = {}) {
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("Downloading Update")
             .setDescription("Version $version is downloading...")
@@ -124,6 +126,7 @@ class UpdateManager(private val context: Context) {
                 if (intent.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
                     val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
                     if (id == downloadId) {
+                        onCompleteCallback()
                         installApk(context, downloadId)
                         context.unregisterReceiver(this)
                     }
@@ -136,6 +139,42 @@ class UpdateManager(private val context: Context) {
             IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
             ContextCompat.RECEIVER_EXPORTED
         )
+
+        // Poll progress
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            var isDownloading = true
+            while (isDownloading) {
+                val query = DownloadManager.Query().setFilterById(downloadId)
+                val cursor = downloadManager.query(query)
+                if (cursor != null && cursor.moveToFirst()) {
+                    val statusColumn = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                    if (statusColumn >= 0) {
+                        val status = cursor.getInt(statusColumn)
+                        if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
+                            isDownloading = false
+                        } else if (status == DownloadManager.STATUS_RUNNING) {
+                            val downloadedColumn = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                            val totalColumn = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                            
+                            if (downloadedColumn >= 0 && totalColumn >= 0) {
+                                val downloaded = cursor.getLong(downloadedColumn)
+                                val total = cursor.getLong(totalColumn)
+                                if (total > 0) {
+                                    val progress = downloaded.toFloat() / total.toFloat()
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        onProgress(progress)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                cursor?.close()
+                if (isDownloading) {
+                    kotlinx.coroutines.delay(100)
+                }
+            }
+        }
     }
 
     private fun installApk(context: Context, downloadId: Long) {
@@ -151,7 +190,14 @@ class UpdateManager(private val context: Context) {
 }
 
 sealed class UpdateResult {
+    object Checking : UpdateResult()
     data class UpdateAvailable(val version: String, val changelog: String, val downloadUrl: String) : UpdateResult()
     object NoUpdate : UpdateResult()
     data class Error(val message: String) : UpdateResult()
+}
+
+sealed class DownloadState {
+    object Idle : DownloadState()
+    data class Downloading(val progress: Float) : DownloadState()
+    object ReadyToInstall : DownloadState()
 }

@@ -62,8 +62,6 @@ fun SettingsScreen(
     onLastFmApiKeyChange: (String) -> Unit,
     onFanartTvApiKeyChange: (String) -> Unit,
     onGeminiApiKeyChange: (String) -> Unit,
-    coilDiskCacheLimitMb: Int,
-    onCoilDiskCacheLimitMbChange: (Int) -> Unit,
     onNavigateToWaveProperties: () -> Unit,
     onNavigateToJigglePhysics: () -> Unit,
     onNavigateToEqualizer: () -> Unit,
@@ -85,6 +83,9 @@ fun SettingsScreen(
     onExportScanLog: () -> Unit = {},
     developerOptionsUnlocked: Boolean = false,
     onUnlockDeveloperOptions: () -> Unit = {},
+    autoUpdateEnabled: Boolean = true,
+    onAutoUpdateEnabledChange: (Boolean) -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
     bottomPadding: androidx.compose.ui.unit.Dp = 24.dp,
     modifier: Modifier = Modifier
 ) {
@@ -423,65 +424,6 @@ fun SettingsScreen(
                     }
                 }
                 
-                item {
-                    SettingsGroup(title = "DATA & STORAGE") {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f))
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Storage, 
-                                            contentDescription = null, 
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    Column {
-                                        Text(
-                                            text = "Image Cache Limit",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = "Requires app restart",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                val displayValue = if (coilDiskCacheLimitMb >= 1000) {
-                                    String.format("%.1f GB", coilDiskCacheLimitMb / 1000f)
-                                } else {
-                                    "${coilDiskCacheLimitMb} MB"
-                                }
-                                Text(
-                                    text = displayValue,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            
-                            Slider(
-                                value = coilDiskCacheLimitMb.toFloat(),
-                                onValueChange = { onCoilDiskCacheLimitMbChange(it.toInt()) },
-                                valueRange = 250f..5000f,
-                                steps = 18, // (5000 - 250) / 250 = 19 points -> 18 steps
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                        }
-                    }
-                }
 
                 item {
                     if (developerOptionsUnlocked) {
@@ -549,6 +491,23 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                        SettingsItem(
+                            icon = Icons.Outlined.Update,
+                            text = "Check for updates",
+                            onClick = onCheckForUpdates,
+                            showArrow = false
+                        )
+                        SettingsItem(
+                            icon = Icons.Outlined.SystemUpdate,
+                            text = "Auto update",
+                            trailingContent = {
+                                Switch(
+                                    checked = autoUpdateEnabled,
+                                    onCheckedChange = { onAutoUpdateEnabledChange(it) }
+                                )
+                            },
+                            showArrow = false
+                        )
                     }
                 }
             }
