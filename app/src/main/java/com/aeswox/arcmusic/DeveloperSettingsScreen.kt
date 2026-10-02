@@ -192,17 +192,8 @@ fun DeveloperSettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Diagnostics Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(
-                        elevation = 2.dp,
-                        shape = RoundedCornerShape(20.dp),
-                    ),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)
-                )
+            GlassCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
@@ -286,18 +277,10 @@ private fun DeveloperCard(
     icon: ImageVector,
     onClick: () -> Unit
 ) {
-    Card(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 2.dp,
-                shape = RoundedCornerShape(20.dp),
-            )
-            .jellyClick { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f)
-        )
+            .jellyClick { onClick() }
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
@@ -357,13 +340,8 @@ private fun ExpandableSettingsCard(
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp))
-            .clip(RoundedCornerShape(20.dp)),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
+    GlassCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column {
             Row(
