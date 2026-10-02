@@ -165,6 +165,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         lifecycleScope.launch {
+            kotlinx.coroutines.delay(2000)
             val updateManager = UpdateManager(this@MainActivity)
             val result = updateManager.checkForUpdates("aswinsroy1", "arcmusic")
             if (result is UpdateResult.UpdateAvailable) {

@@ -1,11 +1,19 @@
 package com.aeswox.arcmusic
 
 import androidx.compose.foundation.background
+import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -77,7 +85,7 @@ fun DeveloperSettingsScreen(
     modifier: Modifier = Modifier
 ) {
     Scaffold(
-        modifier = modifier.background(MaterialTheme.colorScheme.background),
+        modifier = modifier,
         containerColor = Color.Transparent,
         topBar = {
             CenterAlignedTopAppBar(
@@ -97,159 +105,73 @@ fun DeveloperSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .physicsBounceOverscroll()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Glass Properties
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            // Glass & Glow Engine
+            ExpandableSettingsCard(
+                title = "Glass & Glow Engine",
+                onReset = {
+                    onTintTransparencyChange(0.40f)
+                    onNoiseFactorChange(0.06f)
+                    onGlowIntensityChange(0.38f)
+                }
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Glass Tint Transparency: ${String.format("%.2f", tintTransparency)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    CustomHorizontalSlider(
-                        value = tintTransparency,
-                        onValueChange = onTintTransparencyChange,
-                        valueRange = 0.0f..0.8f
-                    )
-                }
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Monochromatic Noise Factor: ${String.format("%.2f", noiseFactor)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    CustomHorizontalSlider(
-                        value = noiseFactor,
-                        onValueChange = onNoiseFactorChange,
-                        valueRange = 0.0f..0.12f
-                    )
-                }
+                SliderRow("Glass Tint Transparency", tintTransparency, onTintTransparencyChange, 0.0f..0.8f)
+                SliderRow("Monochromatic Noise Factor", noiseFactor, onNoiseFactorChange, 0.0f..0.12f)
+                SliderRow("Glow Intensity", glowIntensity, onGlowIntensityChange, 0.0f..1.0f)
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Background Elements
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Glow Intensity: ${String.format("%.2f", glowIntensity)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    CustomHorizontalSlider(
-                        value = glowIntensity,
-                        onValueChange = onGlowIntensityChange,
-                        valueRange = 0.0f..1.0f
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
+
 
             // Jiggle Physics
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            ExpandableSettingsCard(
+                title = "Jiggle Physics",
+                onReset = {
+                    onPhysicsMassChange(0.2f)
+                    onPhysicsStiffnessChange(100.0f)
+                    onPhysicsDampingRatioChange(0.25f)
+                    onPhysicsAmplitudeChange(1.0f)
+                    onPhysicsGravityChange(9.81f)
+                }
             ) {
-                Text(
-                    text = "Jiggle Physics",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp)
-                )
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Mass: ${String.format("%.2f", physicsMass)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = physicsMass, onValueChange = onPhysicsMassChange, valueRange = 0.1f..1.0f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Stiffness: ${String.format("%.2f", physicsStiffness)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = physicsStiffness, onValueChange = onPhysicsStiffnessChange, valueRange = 10.0f..200.0f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Damping Ratio: ${String.format("%.2f", physicsDampingRatio)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = physicsDampingRatio, onValueChange = onPhysicsDampingRatioChange, valueRange = 0.1f..0.5f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Impact Amplitude: ${String.format("%.2f", physicsAmplitude)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = physicsAmplitude, onValueChange = onPhysicsAmplitudeChange, valueRange = 0.1f..2.0f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Gravity: ${String.format("%.2f", physicsGravity)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = physicsGravity, onValueChange = onPhysicsGravityChange, valueRange = 0.1f..20.0f)
-                }
+                SliderRow("Mass", physicsMass, onPhysicsMassChange, 0.1f..1.0f)
+                SliderRow("Stiffness", physicsStiffness, onPhysicsStiffnessChange, 10.0f..200.0f)
+                SliderRow("Damping Ratio", physicsDampingRatio, onPhysicsDampingRatioChange, 0.1f..0.5f)
+                SliderRow("Impact Amplitude", physicsAmplitude, onPhysicsAmplitudeChange, 0.1f..2.0f)
+                SliderRow("Gravity", physicsGravity, onPhysicsGravityChange, 0.1f..20.0f)
             }
             Spacer(modifier = Modifier.height(12.dp))
 
             // Wave Properties
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+            ExpandableSettingsCard(
+                title = "Wave Properties",
+                onReset = {
+                    onBaselineHeightChange(5.75f)
+                    onWaveMaxAmpChange(8.81f)
+                    onCycleLengthChange(126.41f)
+                    onShadowOffsetChange(2.42f)
+                    onShadowOpacityChange(0.50f)
+                    onPrimaryOpacityChange(0.92f)
+                    onThumbRadiusChange(7.00f)
+                    onUnplayedStrokeChange(5.75f)
+                    onBloomDurationChange(600f)
+                }
             ) {
-                Text(
-                    text = "Wave Properties",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp)
-                )
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Baseline Height (dp): ${String.format("%.2f", baselineHeight)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = baselineHeight, onValueChange = onBaselineHeightChange, valueRange = 0f..15f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Wave Max Amplitude (dp): ${String.format("%.2f", waveMaxAmp)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = waveMaxAmp, onValueChange = onWaveMaxAmpChange, valueRange = 0f..10f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Cycle Length (dp): ${String.format("%.2f", cycleLength)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = cycleLength, onValueChange = onCycleLengthChange, valueRange = 20f..200f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Shadow Offset (rad): ${String.format("%.2f", shadowOffset)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = shadowOffset, onValueChange = onShadowOffsetChange, valueRange = 0f..6.28f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Shadow Opacity: ${String.format("%.2f", shadowOpacity)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = shadowOpacity, onValueChange = onShadowOpacityChange, valueRange = 0f..1f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Primary Wave Opacity: ${String.format("%.2f", primaryOpacity)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = primaryOpacity, onValueChange = onPrimaryOpacityChange, valueRange = 0f..1f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Thumb Radius (dp): ${String.format("%.2f", thumbRadius)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = thumbRadius, onValueChange = onThumbRadiusChange, valueRange = 0f..15f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Unplayed Stroke (dp): ${String.format("%.2f", unplayedStroke)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = unplayedStroke, onValueChange = onUnplayedStrokeChange, valueRange = 1f..10f)
-                }
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Bloom Duration (ms): ${String.format("%.2f", bloomDuration)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    CustomHorizontalSlider(value = bloomDuration, onValueChange = onBloomDurationChange, valueRange = 100f..2000f)
-                }
+                SliderRow("Baseline Height (dp)", baselineHeight, onBaselineHeightChange, 0f..15f)
+                SliderRow("Wave Max Amplitude (dp)", waveMaxAmp, onWaveMaxAmpChange, 0f..15f)
+                SliderRow("Cycle Length (dp)", cycleLength, onCycleLengthChange, 20f..200f)
+                SliderRow("Shadow Offset (rad)", shadowOffset, onShadowOffsetChange, 0f..6.28f)
+                SliderRow("Shadow Opacity", shadowOpacity, onShadowOpacityChange, 0f..1f)
+                SliderRow("Primary Wave Opacity", primaryOpacity, onPrimaryOpacityChange, 0f..1f)
+                SliderRow("Thumb Radius (dp)", thumbRadius, onThumbRadiusChange, 0f..15f)
+                SliderRow("Unplayed Stroke (dp)", unplayedStroke, onUnplayedStrokeChange, 1f..10f)
+                SliderRow("Bloom Duration (ms)", bloomDuration, onBloomDurationChange, 100f..2000f)
             }
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -411,6 +333,70 @@ private fun DeveloperCard(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SliderRow(label: String, value: Float, onValueChange: (Float) -> Unit, valueRange: ClosedFloatingPointRange<Float>, format: String = "%.2f") {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(text = label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = String.format(format, value), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        }
+        CustomHorizontalSlider(value = value, onValueChange = onValueChange, valueRange = valueRange)
+    }
+}
+
+@Composable
+private fun ExpandableSettingsCard(
+    title: String,
+    onReset: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                JellyIconButton(onClick = onReset, modifier = Modifier.size(32.dp)) {
+                    Icon(imageVector = Icons.Outlined.RestartAlt, contentDescription = "Reset", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                    content()
                 }
             }
         }
