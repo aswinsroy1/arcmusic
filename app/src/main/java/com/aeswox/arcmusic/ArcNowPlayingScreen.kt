@@ -481,82 +481,73 @@ fun ArcNowPlayingScreen(
 
 
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val imageRequest = ImageRequest.Builder(LocalContext.current)
-
-            .data(imageUrl)
-
-            .allowHardware(false)
-
-            .build()
-
-
 
         // The background that Haze will read from
 
         Box(modifier = Modifier.fillMaxSize()) {
 
             // Blurred background for the whole screen
+            Crossfade(
+                targetState = imageUrl,
+                animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+                label = "bg_crossfade"
+            ) { targetUrl ->
+                val imageRequest = ImageRequest.Builder(LocalContext.current)
+                    .data(targetUrl)
+                    .allowHardware(false)
+                    .build()
 
-            AsyncImage(
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    onSuccess = { state ->
+                        val drawable = state.result.drawable
+                        val bitmap = (drawable as? BitmapDrawable)?.bitmap
+                        if (bitmap != null) {
+                            // Sample the bottom 20% strip of the artwork to get the color
+                            // that actually sits at the artwork/controls boundary.
+                            val stripTop = (bitmap.height * 0.80f).toInt().coerceAtLeast(0)
+                            val bottomStrip = android.graphics.Bitmap.createBitmap(
+                                bitmap, 0, stripTop, bitmap.width, bitmap.height - stripTop
+                            )
 
-                model = imageRequest,
+                            // Average the pixels in the strip for a smooth representative colour
+                            var rSum = 0L; var gSum = 0L; var bSum = 0L
+                            val pixels = IntArray(bottomStrip.width * bottomStrip.height)
+                            bottomStrip.getPixels(pixels, 0, bottomStrip.width, 0, 0, bottomStrip.width, bottomStrip.height)
+                            pixels.forEach { px ->
+                                rSum += android.graphics.Color.red(px)
+                                gSum += android.graphics.Color.green(px)
+                                bSum += android.graphics.Color.blue(px)
+                            }
+                            val count = pixels.size.toLong().coerceAtLeast(1L)
+                            val avgColor = Color(
+                                red   = (rSum / count).toInt().coerceIn(0, 255),
+                                green = (gSum / count).toInt().coerceIn(0, 255),
+                                blue  = (bSum / count).toInt().coerceIn(0, 255)
+                            )
+                            bottomStrip.recycle()
 
-                contentDescription = null,
-
-                contentScale = ContentScale.Crop,
-
-                onSuccess = { state ->
-
-                    val drawable = state.result.drawable
-
-                    val bitmap = (drawable as? BitmapDrawable)?.bitmap
-
-                    if (bitmap != null) {
-
-                        // Sample the bottom 20% strip of the artwork to get the color
-                        // that actually sits at the artwork/controls boundary.
-                        val stripTop = (bitmap.height * 0.80f).toInt().coerceAtLeast(0)
-                        val bottomStrip = android.graphics.Bitmap.createBitmap(
-                            bitmap, 0, stripTop, bitmap.width, bitmap.height - stripTop
-                        )
-
-                        // Average the pixels in the strip for a smooth representative colour
-                        var rSum = 0L; var gSum = 0L; var bSum = 0L
-                        val pixels = IntArray(bottomStrip.width * bottomStrip.height)
-                        bottomStrip.getPixels(pixels, 0, bottomStrip.width, 0, 0, bottomStrip.width, bottomStrip.height)
-                        pixels.forEach { px ->
-                            rSum += android.graphics.Color.red(px)
-                            gSum += android.graphics.Color.green(px)
-                            bSum += android.graphics.Color.blue(px)
+                            // If the bottom strip is very bright (near-white artwork edge),
+                            // force a neutral grey so white controls stay legible â€” same
+                            // approach Apple Music uses for bright artworks.
+                            if (targetUrl == imageUrl) {
+                                if (avgColor.luminance() > 0.65f) {
+                                    isWhiteArtwork = true
+                                    targetAccentColor = Color(0xFF666666)
+                                } else {
+                                    isWhiteArtwork = false
+                                    targetAccentColor = avgColor
+                                }
+                            }
                         }
-                        val count = pixels.size.toLong().coerceAtLeast(1L)
-                        val avgColor = Color(
-                            red   = (rSum / count).toInt().coerceIn(0, 255),
-                            green = (gSum / count).toInt().coerceIn(0, 255),
-                            blue  = (bSum / count).toInt().coerceIn(0, 255)
-                        )
-                        bottomStrip.recycle()
-
-                        // If the bottom strip is very bright (near-white artwork edge),
-                        // force a neutral grey so white controls stay legible â€” same
-                        // approach Apple Music uses for bright artworks.
-                        if (avgColor.luminance() > 0.65f) {
-                            isWhiteArtwork = true
-                            targetAccentColor = Color(0xFF666666)
-                        } else {
-                            isWhiteArtwork = false
-                            targetAccentColor = avgColor
-                        }
-
-                    }
-
-                },
-
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(80.dp)
-
-            )
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(80.dp)
+                )
+            }
 
             
 
@@ -597,16 +588,18 @@ fun ArcNowPlayingScreen(
                     }
             ) {
                 // Static album art â€” always visible as base/fallback
-                AsyncImage(
-
-                    model = imageUrl,
-
-                    contentDescription = "Album Art",
-
-                    contentScale = ContentScale.Crop,
-
-                    modifier = Modifier.fillMaxSize()
-                )
+                Crossfade(
+                    targetState = imageUrl,
+                    animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+                    label = "sharp_art_crossfade"
+                ) { targetUrl ->
+                    AsyncImage(
+                        model = targetUrl,
+                        contentDescription = "Album Art",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
 
                 // Canvas artwork player â€” crossfades in over the static art
                 val activeCanvasUrl = canvasUrl
@@ -2050,18 +2043,29 @@ fun ArcLyricsContent(
     val topFadeStartPx = with(androidx.compose.ui.platform.LocalDensity.current) { 136.dp.toPx() }
     val topFadeEndPx = with(androidx.compose.ui.platform.LocalDensity.current) { 176.dp.toPx() }
 
+    var showSyncControls by remember { mutableStateOf(false) }
+    var syncOffsetMs by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(showSyncControls, syncOffsetMs) {
+        if (showSyncControls) {
+            kotlinx.coroutines.delay(5000L)
+            showSyncControls = false
+        }
+    }
+
     Box(modifier = Modifier
         .fillMaxSize()
         .graphicsLayer { alpha = lyricsFraction }
     ) {
         ArcLyricsPanel(
             lines = linesToRender,
-            positionMs = currentPosition,
+            positionMs = (currentPosition - syncOffsetMs).coerceAtLeast(0L),
             isPlaying = isPlaying,
             textColor = textColor,
             onSeekToLine = { posMs -> 
                 if (duration > 0) viewModel.seekTo(posMs.toFloat() / duration) 
             },
+            onLongPressLine = { showSyncControls = true },
             controlsOpen = lyricsControlsVisible,
             onRevealControls = onRevealControls,
             onHideControls = onHideControls,
@@ -2095,6 +2099,37 @@ fun ArcLyricsContent(
                     }
                 }
         )
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSyncControls && lyricsFraction > 0.5f,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = with(androidx.compose.ui.platform.LocalDensity.current) { controlsHeightPx.toDp() } + 24.dp)
+                .padding(horizontal = 24.dp),
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(
+                initialScale = 0.8f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                )
+            ),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(
+                targetScale = 0.8f,
+                animationSpec = androidx.compose.animation.core.tween(200)
+            )
+        ) {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                com.aeswox.arcmusic.ui.components.LyricsSyncControls(
+                    modifier = Modifier.padding(8.dp),
+                    offsetMillis = syncOffsetMs,
+                    onOffsetChange = { syncOffsetMs = it },
+                    backgroundColor = Color.Transparent,
+                    accentColor = accentColor,
+                    onAccentColor = Color.White,
+                    onBackgroundColor = textColor
+                )
+            }
+        }
         
         // Playing Now Header Overlay
         songToPlay?.let { track ->

@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
@@ -763,6 +765,7 @@ internal fun ArcLyricsPanel(
     isPlaying: Boolean,
     textColor: Color,
     onSeekToLine: (Long) -> Unit,
+    onLongPressLine: () -> Unit = {},
     controlsOpen: Boolean,
     onRevealControls: () -> Unit,
     onHideControls: () -> Unit,
@@ -979,11 +982,16 @@ internal fun ArcLyricsPanel(
                     }
                 }
                 .clip(RoundedCornerShape(10.dp))
-                .clickable(
-                    enabled = isSynced,
-                    interactionSource = interaction,
-                    indication = androidx.compose.foundation.LocalIndication.current,
-                ) { onSeekToLine(line.time.toLong()) }
+                .let { modifierObj ->
+                    @OptIn(ExperimentalFoundationApi::class)
+                    modifierObj.combinedClickable(
+                        enabled = isSynced,
+                        interactionSource = interaction,
+                        indication = androidx.compose.foundation.LocalIndication.current,
+                        onClick = { onSeekToLine(line.time.toLong()) },
+                        onLongClick = { onLongPressLine() }
+                    )
+                }
 
             // Word-synced path
             if (!line.words.isNullOrEmpty() && isSynced) {
