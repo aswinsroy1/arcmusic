@@ -375,6 +375,17 @@ class MusicViewModel @Inject constructor(
         }
     }
 
+    fun setLyricsSyncOffset(trackId: String, offsetMs: Int) {
+        viewModelScope.launch {
+            repository.updateLyricsSyncOffset(trackId, offsetMs)
+            // Optionally update the current playing track in memory so it persists across screen re-compositions
+            val current = _currentlyPlaying.value
+            if (current != null && current.id == trackId) {
+                _currentlyPlaying.value = current.copy(lyricsSyncOffsetMs = offsetMs)
+            }
+        }
+    }
+
     private val _lyricsUiState = MutableStateFlow<com.aeswox.arcmusic.data.model.Lyrics?>(null)
     val lyricsUiState: StateFlow<com.aeswox.arcmusic.data.model.Lyrics?> = _lyricsUiState.asStateFlow()
     val currentPlaybackPosition: StateFlow<Long> = musicPlayerConnection.currentPosition

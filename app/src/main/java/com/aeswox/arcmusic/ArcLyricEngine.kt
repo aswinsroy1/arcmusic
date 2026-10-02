@@ -758,6 +758,7 @@ private fun arcKeepScrollInList(listState: LazyListState) = object : NestedScrol
  *  - scrolling up/down reveals/hides the player controls
  *  - tapping a line seeks to it
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun ArcLyricsPanel(
     lines: List<SyncedLine>,
@@ -983,7 +984,6 @@ internal fun ArcLyricsPanel(
                 }
                 .clip(RoundedCornerShape(10.dp))
                 .let { modifierObj ->
-                    @OptIn(ExperimentalFoundationApi::class)
                     modifierObj.combinedClickable(
                         enabled = isSynced,
                         interactionSource = interaction,

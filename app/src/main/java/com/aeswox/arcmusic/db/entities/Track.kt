@@ -35,7 +35,8 @@ data class Track(
     val lyricsSyncedAt: Long = 0L,
     val canvasUrl: String? = null,
     val canvasSyncedAt: Long = 0L,
-    val isExplicit: Boolean? = null
+    val isExplicit: Boolean? = null,
+    val lyricsSyncOffsetMs: Int = 0
 )
 
 

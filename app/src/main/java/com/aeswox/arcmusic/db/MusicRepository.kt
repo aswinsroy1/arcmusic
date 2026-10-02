@@ -81,6 +81,7 @@ class MusicRepository(
     fun getAllArtists(): Flow<List<Artist>> = artistDao.getAllArtists()
     fun getRecentlyPlayedTracks(limit: Int): Flow<List<Track>> = trackDao.getRecentlyPlayedTracks(limit)
     fun getRandomTracks(limit: Int): Flow<List<Track>> = trackDao.getRandomTracks(limit)
+    suspend fun updateLyricsSyncOffset(trackId: String, offsetMs: Int) = trackDao.updateLyricsSyncOffset(trackId, offsetMs)
 
     suspend fun getRandomTracksWithArtwork(limit: Int): List<Track> = trackDao.getRandomTracksWithArtwork(limit)
     suspend fun getRandomAlbumsWithArtwork(limit: Int): List<Album> = albumDao.getRandomAlbumsWithArtwork(limit)

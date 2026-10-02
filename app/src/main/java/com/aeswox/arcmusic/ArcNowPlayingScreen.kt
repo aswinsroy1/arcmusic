@@ -487,18 +487,14 @@ fun ArcNowPlayingScreen(
         Box(modifier = Modifier.fillMaxSize()) {
 
             // Blurred background for the whole screen
-            Crossfade(
-                targetState = imageUrl,
-                animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
-                label = "bg_crossfade"
-            ) { targetUrl ->
-                val imageRequest = ImageRequest.Builder(LocalContext.current)
-                    .data(targetUrl)
-                    .allowHardware(false)
-                    .build()
+            val bgImageRequest = ImageRequest.Builder(LocalContext.current)
+                .data(imageUrl)
+                .crossfade(800)
+                .allowHardware(false)
+                .build()
 
-                AsyncImage(
-                    model = imageRequest,
+            AsyncImage(
+                model = bgImageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     onSuccess = { state ->
@@ -530,16 +526,14 @@ fun ArcNowPlayingScreen(
                             bottomStrip.recycle()
 
                             // If the bottom strip is very bright (near-white artwork edge),
-                            // force a neutral grey so white controls stay legible â€” same
+                            // force a neutral grey so white controls stay legible — same
                             // approach Apple Music uses for bright artworks.
-                            if (targetUrl == imageUrl) {
-                                if (avgColor.luminance() > 0.65f) {
-                                    isWhiteArtwork = true
-                                    targetAccentColor = Color(0xFF666666)
-                                } else {
-                                    isWhiteArtwork = false
-                                    targetAccentColor = avgColor
-                                }
+                            if (avgColor.luminance() > 0.65f) {
+                                isWhiteArtwork = true
+                                targetAccentColor = Color(0xFF666666)
+                            } else {
+                                isWhiteArtwork = false
+                                targetAccentColor = avgColor
                             }
                         }
                     },
@@ -547,7 +541,6 @@ fun ArcNowPlayingScreen(
                         .fillMaxSize()
                         .blur(80.dp)
                 )
-            }
 
             
 
@@ -587,19 +580,18 @@ fun ArcNowPlayingScreen(
                         )
                     }
             ) {
-                // Static album art â€” always visible as base/fallback
-                Crossfade(
-                    targetState = imageUrl,
-                    animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
-                    label = "sharp_art_crossfade"
-                ) { targetUrl ->
-                    AsyncImage(
-                        model = targetUrl,
-                        contentDescription = "Album Art",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                // Static album art — always visible as base/fallback
+                val sharpImageRequest = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(800)
+                    .build()
+
+                AsyncImage(
+                    model = sharpImageRequest,
+                    contentDescription = "Album Art",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
 
                 // Canvas artwork player â€” crossfades in over the static art
                 val activeCanvasUrl = canvasUrl
@@ -2044,7 +2036,7 @@ fun ArcLyricsContent(
     val topFadeEndPx = with(androidx.compose.ui.platform.LocalDensity.current) { 176.dp.toPx() }
 
     var showSyncControls by remember { mutableStateOf(false) }
-    var syncOffsetMs by remember { mutableIntStateOf(0) }
+    var syncOffsetMs by remember(songToPlay?.id) { mutableIntStateOf(songToPlay?.lyricsSyncOffsetMs ?: 0) }
 
     LaunchedEffect(showSyncControls, syncOffsetMs) {
         if (showSyncControls) {
@@ -2118,14 +2110,27 @@ fun ArcLyricsContent(
                 animationSpec = androidx.compose.animation.core.tween(200)
             )
         ) {
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(32.dp))
+                    .background(textColor.copy(alpha = 0.08f))
+                    .border(
+                        width = 1.dp,
+                        color = textColor.copy(alpha = 0.12f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)
+                    )
+            ) {
                 com.aeswox.arcmusic.ui.components.LyricsSyncControls(
-                    modifier = Modifier.padding(8.dp),
+                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp),
                     offsetMillis = syncOffsetMs,
-                    onOffsetChange = { syncOffsetMs = it },
+                    onOffsetChange = { 
+                        syncOffsetMs = it 
+                        songToPlay?.let { song -> viewModel.setLyricsSyncOffset(song.id, it) }
+                    },
                     backgroundColor = Color.Transparent,
-                    accentColor = accentColor,
-                    onAccentColor = Color.White,
+                    accentColor = textColor.copy(alpha = 0.15f),
+                    onAccentColor = textColor,
                     onBackgroundColor = textColor
                 )
             }

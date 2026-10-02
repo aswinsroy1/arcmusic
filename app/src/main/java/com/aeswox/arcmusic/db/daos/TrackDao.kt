@@ -81,6 +81,9 @@ interface TrackDao {
     @Query("UPDATE tracks SET hasLyrics = :hasLyrics, lyricsSyncedAt = :syncedAt WHERE id = :trackId")
     suspend fun updateLyricsStatus(trackId: String, hasLyrics: Boolean, syncedAt: Long)
 
+    @Query("UPDATE tracks SET lyricsSyncOffsetMs = :offsetMs WHERE id = :trackId")
+    suspend fun updateLyricsSyncOffset(trackId: String, offsetMs: Int)
+
     @Query("UPDATE tracks SET playCount = playCount + 1, lastPlayedAt = :timestamp WHERE id = :trackId")
     suspend fun incrementPlayCountAndUpdateLastPlayed(trackId: String, timestamp: Long)
 
