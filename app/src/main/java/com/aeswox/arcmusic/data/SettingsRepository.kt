@@ -88,6 +88,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     private val AUTOPLAY_ENABLED_KEY = booleanPreferencesKey("autoplay_enabled")
     private val APP_ICON_VARIANT_KEY = stringPreferencesKey("app_icon_variant")
     private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
+    private val DEVELOPER_OPTIONS_UNLOCKED_KEY = booleanPreferencesKey("developer_options_unlocked")
 
     val appIconVariant: Flow<AppIconVariant> = context.dataStore.data.map { preferences ->
         when (preferences[APP_ICON_VARIANT_KEY]) {
@@ -137,6 +138,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     }
     val canvasEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[CANVAS_ENABLED_KEY] ?: true
+    }
+    
+    val developerOptionsUnlocked: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[DEVELOPER_OPTIONS_UNLOCKED_KEY] ?: false
     }
 
     val canvasCacheLimitMb: Flow<Int> = context.dataStore.data.map { preferences ->
@@ -405,6 +410,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setCanvasEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[CANVAS_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setDeveloperOptionsUnlocked(unlocked: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[DEVELOPER_OPTIONS_UNLOCKED_KEY] = unlocked
         }
     }
 

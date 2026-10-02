@@ -241,6 +241,9 @@ class MusicViewModel @Inject constructor(
     val heroCardIncludeArtistsAndAlbums: StateFlow<Boolean> = settingsRepository.heroCardIncludeArtistsAndAlbums
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val developerOptionsUnlocked: StateFlow<Boolean> = settingsRepository.developerOptionsUnlocked
+        .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
     val libraryAlbums: StateFlow<List<Album>>
     val libraryArtists: StateFlow<List<Artist>>
     val libraryTracks: StateFlow<List<Track>>
@@ -275,6 +278,12 @@ class MusicViewModel @Inject constructor(
     fun setHeroCardIncludeArtistsAndAlbums(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setHeroCardIncludeArtistsAndAlbums(enabled)
+        }
+    }
+
+    fun setDeveloperOptionsUnlocked(unlocked: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDeveloperOptionsUnlocked(unlocked)
         }
     }
 

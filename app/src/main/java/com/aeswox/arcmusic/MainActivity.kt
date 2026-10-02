@@ -808,6 +808,7 @@ class MainActivity : ComponentActivity() {
                             val coilDiskCacheLimitMb by viewModel.coilDiskCacheLimitMb.collectAsState()
                             val heroCardPlayingStateEnabled by viewModel.heroCardPlayingStateEnabled.collectAsState()
                             val heroCardIncludeArtistsAndAlbums by viewModel.heroCardIncludeArtistsAndAlbums.collectAsState()
+                            val developerOptionsUnlocked by viewModel.developerOptionsUnlocked.collectAsState()
                             
                             val dynamicBottomPadding by remember(isMiniPlayerVisible, currentlyPlaying) {
                                 derivedStateOf {
@@ -842,6 +843,7 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToWaveProperties = { navController.navigate("wave_properties") },
                                     onNavigateToJigglePhysics = { navController.navigate("jiggle_physics") },
                                     onNavigateToEqualizer = { navController.navigate("equalizer") },
+                                    onNavigateToDeveloperOptions = { navController.navigate("developer_options") },
                                     onNavigateToMediaManagement = { navController.navigate("media_management") },
                                     onNavigateToNowPlayingStyleSettings = { navController.navigate("now_playing_style_settings") },
                                     onNavigateToCanvasSettings = { navController.navigate("canvas_settings") },
@@ -866,7 +868,39 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onExportScanLog = {
                                         viewModel.exportScanLog(context)
-                                    }
+                                    },
+                                    developerOptionsUnlocked = developerOptionsUnlocked,
+                                    onUnlockDeveloperOptions = { viewModel.setDeveloperOptionsUnlocked(true) }
+                                )
+                            }
+                        }
+                        composable(
+                            route = "developer_options",
+                            enterTransition = { NavTransitions.SheetEnter },
+                            exitTransition = { NavTransitions.SheetExit },
+                            popEnterTransition = { NavTransitions.SheetPopEnter },
+                            popExitTransition = { NavTransitions.SheetPopExit }
+                        ) {
+                            val context = LocalContext.current
+                            val settingsPermissionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                listOf(Manifest.permission.READ_MEDIA_AUDIO)
+                            } else {
+                                listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                            }
+                            val settingsPermissionsState = rememberMultiplePermissionsState(permissions = settingsPermissionsList)
+                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                                DeveloperSettingsScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onScanMediaStore = {
+                                        if (settingsPermissionsState.allPermissionsGranted) {
+                                            viewModel.scanMediaStore()
+                                        } else {
+                                            settingsPermissionsState.launchMultiplePermissionRequest()
+                                        }
+                                    },
+                                    onTestEac3 = { viewModel.testEac3Playback(context) },
+                                    onClearScanLog = { viewModel.clearScanLog() },
+                                    onExportScanLog = { viewModel.exportScanLog(context) }
                                 )
                             }
                         }

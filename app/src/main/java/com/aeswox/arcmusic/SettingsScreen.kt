@@ -60,8 +60,8 @@ fun SettingsScreen(
     onNavigateToAppearance: () -> Unit,
     onNavigateToWaveProperties: () -> Unit,
     onNavigateToJigglePhysics: () -> Unit,
-
     onNavigateToEqualizer: () -> Unit,
+    onNavigateToDeveloperOptions: () -> Unit,
     onNavigateToMediaManagement: () -> Unit,
     onNavigateToNowPlayingStyleSettings: () -> Unit,
     onNavigateToCanvasSettings: () -> Unit,
@@ -77,10 +77,14 @@ fun SettingsScreen(
     onCanvasEnabledChange: (Boolean) -> Unit = {},
     onClearScanLog: () -> Unit = {},
     onExportScanLog: () -> Unit = {},
+    developerOptionsUnlocked: Boolean = false,
+    onUnlockDeveloperOptions: () -> Unit = {},
     bottomPadding: androidx.compose.ui.unit.Dp = 24.dp,
     modifier: Modifier = Modifier
 ) {
     val hazeState = remember { HazeState() }
+    var aboutClickCount by remember { mutableIntStateOf(0) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var apiKeyInput by remember { mutableStateOf("") }
     
@@ -461,87 +465,15 @@ fun SettingsScreen(
                 }
 
                 item {
-                    SettingsGroup(title = "DEVELOPER") {
-                        SettingsItem(
-                            icon = Icons.Outlined.Storage,
-                            text = "Scan MediaStore",
-                            onClick = onScanMediaStore,
-                            showArrow = false
-                        )
-                        SettingsItem(
-                            icon = Icons.Outlined.GraphicEq,
-                            text = "Test EAC3 Playback",
-                            onClick = onTestEac3,
-                            showArrow = false
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                        )
-                        // ── DIAGNOSTICS ───────────────────────────────────────────────
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Label
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.BugReport,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Scan Diagnostics Log",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Share with developer to diagnose rescan issues",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(10.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedButton(
-                                        onClick = onClearScanLog,
-                                        modifier = Modifier.jellyClick { onClearScanLog() },
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.DeleteOutline,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Clear Logs", style = MaterialTheme.typography.labelMedium)
-                                    }
-                                    Button(
-                                        onClick = onExportScanLog,
-                                        modifier = Modifier.jellyClick { onExportScanLog() },
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Share,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Export Logs", style = MaterialTheme.typography.labelMedium)
-                                    }
-                                }
-                            }
+                    if (developerOptionsUnlocked) {
+                        SettingsGroup(title = "DEVELOPER") {
+                            SettingsItem(
+                                icon = Icons.Outlined.BugReport,
+                                text = "Developer Options",
+                                onClick = onNavigateToDeveloperOptions,
+                                showArrow = true
+                            )
                         }
-                        // ───────────────────────────────────────────────────────────
                     }
                 }
 
@@ -551,6 +483,18 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .jellyClick {
+                                    if (!developerOptionsUnlocked) {
+                                        aboutClickCount++
+                                        if (aboutClickCount == 7) {
+                                            onUnlockDeveloperOptions()
+                                            android.widget.Toast.makeText(context, "Developer options unlocked", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else if (aboutClickCount >= 3) {
+                                            val remaining = 7 - aboutClickCount
+                                            android.widget.Toast.makeText(context, "You are $remaining steps away from being a developer", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
                                 .padding(horizontal = 16.dp, vertical = 12.dp)
                         ) {
                             Box(
