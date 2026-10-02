@@ -680,6 +680,7 @@ internal fun ArcSweptLyricLine(
                 text = line.line,
                 style = style,
                 color = textColor,
+                textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
                 maxLines = maxLines,
                 overflow = overflow,
                 modifier = Modifier
@@ -698,6 +699,7 @@ internal fun ArcSweptLyricLine(
             text = line.line,
             style = style,
             color = textColor,
+            textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
             maxLines = maxLines,
             overflow = overflow,
             modifier = riseAgainst(

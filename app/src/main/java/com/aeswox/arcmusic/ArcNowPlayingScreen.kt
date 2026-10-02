@@ -305,6 +305,7 @@ fun ArcNowPlayingScreen(
     val randomPicks by viewModel.randomPicks.collectAsState()
 
     val libraryTracks by viewModel.libraryTracks.collectAsState()
+    val libraryArtists by viewModel.libraryArtists.collectAsState()
 
     
 
@@ -1159,44 +1160,44 @@ fun ArcNowPlayingScreen(
                         .padding(bottom = 32.dp, top = 8.dp)
                 ) {
                     // Go to Artist
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .jellyClick { 
-                                currentSheet = null
-                                songToPlay?.let { onNavigateToArtist(it.artist) }
-                            }
-                            .padding(horizontal = 24.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
+                    val artistNames = songToPlay?.artist?.split(Regex(", | & | feat\\.? | ft\\.? ", RegexOption.IGNORE_CASE))
+                        ?.map { it.trim() }?.filter { it.isNotEmpty() } ?: listOf("Unknown")
+                    
+                    artistNames.forEach { artistName ->
+                        val artistInfo = libraryArtists.find { it.name.equals(artistName, ignoreCase = true) }
+                        
+                        Row(
                             modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .jellyClick { 
+                                    currentSheet = null
+                                    onNavigateToArtist(artistName)
+                                }
+                                .padding(horizontal = 24.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = "Artist",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(32.dp)
+                            com.aeswox.arcmusic.ui.components.ArtistImage(
+                                model = artistInfo?.photoUri,
+                                contentDescription = "Artist: $artistName",
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
                             )
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                text = "Go to Artist",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = songToPlay?.artist ?: "Unknown",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = "Go to Artist",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = artistName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                     

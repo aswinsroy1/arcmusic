@@ -221,6 +221,10 @@ class MainActivity : ComponentActivity() {
             val hasCompletedOnboarding by viewModel.hasCompletedOnboarding.collectAsState()
 
             var updateResult by remember { mutableStateOf<com.aeswox.arcmusic.updater.UpdateResult?>(null) }
+            var lastUpdateResult by remember { mutableStateOf<com.aeswox.arcmusic.updater.UpdateResult?>(null) }
+            LaunchedEffect(updateResult) {
+                if (updateResult != null) lastUpdateResult = updateResult
+            }
             var downloadState by remember { mutableStateOf<com.aeswox.arcmusic.updater.DownloadState>(com.aeswox.arcmusic.updater.DownloadState.Idle) }
             val updateManager = remember { com.aeswox.arcmusic.updater.UpdateManager(this@MainActivity) }
             
@@ -272,13 +276,22 @@ class MainActivity : ComponentActivity() {
                             ((splashProgress.value - 1.6f) / 0.4f).coerceIn(0f, 1f)
                         }
                         
+                        val blurRadius by androidx.compose.animation.core.animateDpAsState(
+                            targetValue = if (updateResult != null) 8.dp else 0.dp,
+                            animationSpec = androidx.compose.animation.core.tween(
+                                durationMillis = if (updateResult != null) 800 else 200,
+                                easing = if (updateResult != null) androidx.compose.animation.core.LinearOutSlowInEasing else androidx.compose.animation.core.FastOutLinearInEasing
+                            ),
+                            label = "updaterBlur"
+                        )
+                        
                         Scaffold(
                             modifier = Modifier.fillMaxSize().graphicsLayer {
                                 scaleX = homeScale
                                 scaleY = homeScale
                                 alpha = homeAlpha
                             }.then(
-                                if (updateResult != null) Modifier.blur(8.dp) else Modifier
+                                if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier
                             ),
                             containerColor = Color.Transparent,
                             contentColor = MaterialTheme.colorScheme.onBackground
@@ -1309,9 +1322,9 @@ class MainActivity : ComponentActivity() {
                 } // end SharedTransitionLayout C
             } // end Scaffold trailing lambda
             
-            updateResult?.let { result ->
+            lastUpdateResult?.let { result ->
                 com.aeswox.arcmusic.components.UpdaterOverlay(
-                    isVisible = true,
+                    isVisible = updateResult != null,
                     updateResult = result,
                     downloadState = downloadState,
                     onDismiss = { updateResult = null },

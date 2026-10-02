@@ -2,8 +2,12 @@ package com.aeswox.arcmusic.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -40,8 +44,8 @@ fun UpdaterOverlay(
 ) {
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(tween(300)),
-        exit = fadeOut(tween(300))
+        enter = fadeIn(tween(800, easing = LinearOutSlowInEasing)),
+        exit = fadeOut(tween(200, easing = FastOutLinearInEasing))
     ) {
         Box(
             modifier = Modifier
@@ -60,13 +64,19 @@ fun UpdaterOverlay(
             AnimatedVisibility(
                 visible = isVisible,
                 enter = slideInVertically(
-                    initialOffsetY = { it / 4 },
-                    animationSpec = tween(400)
-                ) + fadeIn(tween(400)),
+                    initialOffsetY = { 80 },
+                    animationSpec = tween(800, easing = LinearOutSlowInEasing)
+                ) + scaleIn(
+                    initialScale = 0.95f,
+                    animationSpec = tween(800, easing = LinearOutSlowInEasing)
+                ) + fadeIn(tween(800, easing = LinearOutSlowInEasing)),
                 exit = slideOutVertically(
-                    targetOffsetY = { it / 4 },
-                    animationSpec = tween(300)
-                ) + fadeOut(tween(300))
+                    targetOffsetY = { 50 },
+                    animationSpec = tween(200, easing = FastOutLinearInEasing)
+                ) + scaleOut(
+                    targetScale = 0.95f,
+                    animationSpec = tween(200, easing = FastOutLinearInEasing)
+                ) + fadeOut(tween(200, easing = FastOutLinearInEasing))
             ) {
                 Box(
                     modifier = Modifier.clickable(
