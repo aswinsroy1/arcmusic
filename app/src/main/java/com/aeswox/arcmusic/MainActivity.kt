@@ -283,7 +283,8 @@ class MainActivity : ComponentActivity() {
                     val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
                     val isMiniPlayerVisible by viewModel.isMiniPlayerVisible.collectAsState()
                     val nowPlayingStyle by viewModel.nowPlayingStyle.collectAsState()
-                    val artworkUrl = if (isMiniPlayerVisible) currentlyPlaying?.artworkUri ?: currentlyPlaying?.albumId?.let { "content://media/external/audio/albumart/$it" } else null
+                    val dynamicColorsEnabled by viewModel.dynamicColorsEnabled.collectAsState()
+                    val artworkUrl = if (dynamicColorsEnabled && isMiniPlayerVisible) currentlyPlaying?.artworkUri ?: currentlyPlaying?.albumId?.let { "content://media/external/audio/albumart/$it" } else null
                     val glowColor by rememberDominantColor(imageUrl = artworkUrl, defaultColor = Color(0xFF5E90A7))
                     
                     val effectiveGlowIntensity = if (isSplashDismissed) glowIntensity else {
@@ -809,6 +810,10 @@ class MainActivity : ComponentActivity() {
                             val heroCardPlayingStateEnabled by viewModel.heroCardPlayingStateEnabled.collectAsState()
                             val heroCardIncludeArtistsAndAlbums by viewModel.heroCardIncludeArtistsAndAlbums.collectAsState()
                             val developerOptionsUnlocked by viewModel.developerOptionsUnlocked.collectAsState()
+                            val autoplayEnabled by viewModel.autoplayEnabled.collectAsState()
+                            val skipSilenceEnabled by viewModel.skipSilenceEnabled.collectAsState()
+                            val resumeOnBluetoothEnabled by viewModel.resumeOnBluetoothEnabled.collectAsState()
+                            val audioDuckingEnabled by viewModel.audioDuckingEnabled.collectAsState()
                             
                             val dynamicBottomPadding by remember(isMiniPlayerVisible, currentlyPlaying) {
                                 derivedStateOf {
@@ -820,14 +825,21 @@ class MainActivity : ComponentActivity() {
                             Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                                 SettingsScreen(
                                     bottomPadding = dynamicBottomPadding,
-                                    tintTransparency = tintTransparency,
-                                    noiseFactor = noiseFactor,
-                                    glowIntensity = glowIntensity,
                                     themeMode = themeMode,
                                     heroCardPlayingStateEnabled = heroCardPlayingStateEnabled,
                                     onHeroCardPlayingStateEnabledChange = { viewModel.setHeroCardPlayingStateEnabled(it) },
                                     heroCardIncludeArtistsAndAlbums = heroCardIncludeArtistsAndAlbums,
                                     onHeroCardIncludeArtistsAndAlbumsChange = { viewModel.setHeroCardIncludeArtistsAndAlbums(it) },
+                                    dynamicColorsEnabled = dynamicColorsEnabled,
+                                    onDynamicColorsEnabledChange = { viewModel.setDynamicColorsEnabled(it) },
+                                    autoplayEnabled = autoplayEnabled,
+                                    onAutoplayEnabledChange = { viewModel.toggleAutoplay() },
+                                    skipSilenceEnabled = skipSilenceEnabled,
+                                    onSkipSilenceEnabledChange = { viewModel.setSkipSilenceEnabled(it) },
+                                    resumeOnBluetoothEnabled = resumeOnBluetoothEnabled,
+                                    onResumeOnBluetoothEnabledChange = { viewModel.setResumeOnBluetoothEnabled(it) },
+                                    audioDuckingEnabled = audioDuckingEnabled,
+                                    onAudioDuckingEnabledChange = { viewModel.setAudioDuckingEnabled(it) },
                                     nowPlayingStyle = nowPlayingStyle,
                                     onNowPlayingStyleChange = { viewModel.setNowPlayingStyle(it) },
                                     lastFmApiKey = lastFmApiKey,
@@ -839,7 +851,6 @@ class MainActivity : ComponentActivity() {
                                     onGeminiApiKeyChange = { viewModel.setGeminiApiKey(it) },
                                     coilDiskCacheLimitMb = coilDiskCacheLimitMb,
                                     onCoilDiskCacheLimitMbChange = { viewModel.setCoilDiskCacheLimitMb(it) },
-                                    onNavigateToAppearance = { navController.navigate("appearance") },
                                     onNavigateToWaveProperties = { navController.navigate("wave_properties") },
                                     onNavigateToJigglePhysics = { navController.navigate("jiggle_physics") },
                                     onNavigateToEqualizer = { navController.navigate("equalizer") },
@@ -888,6 +899,20 @@ class MainActivity : ComponentActivity() {
                                 listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
                             }
                             val settingsPermissionsState = rememberMultiplePermissionsState(permissions = settingsPermissionsList)
+                            val physicsMass by viewModel.physicsMass.collectAsState()
+                            val physicsStiffness by viewModel.physicsStiffness.collectAsState()
+                            val physicsDampingRatio by viewModel.physicsDampingRatio.collectAsState()
+                            val physicsAmplitude by viewModel.physicsAmplitude.collectAsState()
+                            val physicsGravity by viewModel.physicsGravity.collectAsState()
+                            val seekbarBaselineHeight by viewModel.seekbarBaselineHeight.collectAsState()
+                            val seekbarWaveMaxAmp by viewModel.seekbarWaveMaxAmp.collectAsState()
+                            val seekbarCycleLength by viewModel.seekbarCycleLength.collectAsState()
+                            val seekbarShadowOffset by viewModel.seekbarShadowOffset.collectAsState()
+                            val seekbarShadowOpacity by viewModel.seekbarShadowOpacity.collectAsState()
+                            val seekbarPrimaryOpacity by viewModel.seekbarPrimaryOpacity.collectAsState()
+                            val seekbarThumbRadius by viewModel.seekbarThumbRadius.collectAsState()
+                            val seekbarUnplayedStroke by viewModel.seekbarUnplayedStroke.collectAsState()
+                            val seekbarBloomDuration by viewModel.seekbarBloomDuration.collectAsState()
                             Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                                 DeveloperSettingsScreen(
                                     onNavigateBack = { navController.popBackStack() },
@@ -900,7 +925,41 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onTestEac3 = { viewModel.testEac3Playback(context) },
                                     onClearScanLog = { viewModel.clearScanLog() },
-                                    onExportScanLog = { viewModel.exportScanLog(context) }
+                                    onExportScanLog = { viewModel.exportScanLog(context) },
+                                    tintTransparency = tintTransparency,
+                                    noiseFactor = noiseFactor,
+                                    glowIntensity = glowIntensity,
+                                    onTintTransparencyChange = { viewModel.setTintTransparency(it) },
+                                    onNoiseFactorChange = { viewModel.setNoiseFactor(it) },
+                                    onGlowIntensityChange = { viewModel.setGlowIntensity(it) },
+                                    physicsMass = physicsMass,
+                                    physicsStiffness = physicsStiffness,
+                                    physicsDampingRatio = physicsDampingRatio,
+                                    physicsAmplitude = physicsAmplitude,
+                                    physicsGravity = physicsGravity,
+                                    onPhysicsMassChange = { viewModel.setPhysicsMass(it) },
+                                    onPhysicsStiffnessChange = { viewModel.setPhysicsStiffness(it) },
+                                    onPhysicsDampingRatioChange = { viewModel.setPhysicsDampingRatio(it) },
+                                    onPhysicsAmplitudeChange = { viewModel.setPhysicsAmplitude(it) },
+                                    onPhysicsGravityChange = { viewModel.setPhysicsGravity(it) },
+                                    baselineHeight = seekbarBaselineHeight,
+                                    onBaselineHeightChange = { viewModel.setSeekbarBaselineHeight(it) },
+                                    waveMaxAmp = seekbarWaveMaxAmp,
+                                    onWaveMaxAmpChange = { viewModel.setSeekbarWaveMaxAmp(it) },
+                                    cycleLength = seekbarCycleLength,
+                                    onCycleLengthChange = { viewModel.setSeekbarCycleLength(it) },
+                                    shadowOffset = seekbarShadowOffset,
+                                    onShadowOffsetChange = { viewModel.setSeekbarShadowOffset(it) },
+                                    shadowOpacity = seekbarShadowOpacity,
+                                    onShadowOpacityChange = { viewModel.setSeekbarShadowOpacity(it) },
+                                    primaryOpacity = seekbarPrimaryOpacity,
+                                    onPrimaryOpacityChange = { viewModel.setSeekbarPrimaryOpacity(it) },
+                                    thumbRadius = seekbarThumbRadius,
+                                    onThumbRadiusChange = { viewModel.setSeekbarThumbRadius(it) },
+                                    unplayedStroke = seekbarUnplayedStroke,
+                                    onUnplayedStrokeChange = { viewModel.setSeekbarUnplayedStroke(it) },
+                                    bloomDuration = seekbarBloomDuration,
+                                    onBloomDurationChange = { viewModel.setSeekbarBloomDuration(it) }
                                 )
                             }
                         }
@@ -947,25 +1006,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        composable(
-                            route = "appearance",
-                            enterTransition = { NavTransitions.DetailEnter },
-                            exitTransition = { NavTransitions.DetailExit },
-                            popEnterTransition = { NavTransitions.DetailPopEnter },
-                            popExitTransition = { NavTransitions.DetailPopExit }
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                                AppearanceScreen(
-                                    tintTransparency = tintTransparency,
-                                    noiseFactor = noiseFactor,
-                                    glowIntensity = glowIntensity,
-                                    onTintTransparencyChange = { viewModel.setTintTransparency(it) },
-                                    onNoiseFactorChange = { viewModel.setNoiseFactor(it) },
-                                    onGlowIntensityChange = { viewModel.setGlowIntensity(it) },
-                                    onNavigateBack = { navController.popBackStack() }
-                                )
-                            }
-                        }
+
                         composable(
                             route = "app_icon",
                             enterTransition = { NavTransitions.DetailEnter },
@@ -1000,79 +1041,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        composable(
-                            route = "wave_properties",
-                            enterTransition = { NavTransitions.DetailEnter },
-                            exitTransition = { NavTransitions.DetailExit },
-                            popEnterTransition = { NavTransitions.DetailPopEnter },
-                            popExitTransition = { NavTransitions.DetailPopExit }
-                        ) {
-                            val seekbarBaselineHeight by viewModel.seekbarBaselineHeight.collectAsState()
-                            val seekbarWaveMaxAmp by viewModel.seekbarWaveMaxAmp.collectAsState()
-                            val seekbarCycleLength by viewModel.seekbarCycleLength.collectAsState()
-                            val seekbarShadowOffset by viewModel.seekbarShadowOffset.collectAsState()
-                            val seekbarShadowOpacity by viewModel.seekbarShadowOpacity.collectAsState()
-                            val seekbarPrimaryOpacity by viewModel.seekbarPrimaryOpacity.collectAsState()
-                            val seekbarThumbRadius by viewModel.seekbarThumbRadius.collectAsState()
-                            val seekbarUnplayedStroke by viewModel.seekbarUnplayedStroke.collectAsState()
-                            val seekbarBloomDuration by viewModel.seekbarBloomDuration.collectAsState()
 
-                            val dynamicBottomPadding by remember(isMiniPlayerVisible, currentlyPlaying) {
-                                derivedStateOf {
-                                    val miniPlayerOffset = if (isMiniPlayerVisible && currentlyPlaying != null) 96.dp else 0.dp
-                                    24.dp + miniPlayerOffset
-                                }
-                            }
-
-                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                                WavePropertiesScreen(
-                                    bottomPadding = PaddingValues(bottom = dynamicBottomPadding),
-
-                                    onBack = { navController.popBackStack() },
-                                    baselineHeight = seekbarBaselineHeight,
-                                    onBaselineHeightChange = { viewModel.setSeekbarBaselineHeight(it) },
-                                    waveMaxAmp = seekbarWaveMaxAmp,
-                                    onWaveMaxAmpChange = { viewModel.setSeekbarWaveMaxAmp(it) },
-                                    cycleLength = seekbarCycleLength,
-                                    onCycleLengthChange = { viewModel.setSeekbarCycleLength(it) },
-                                    shadowOffset = seekbarShadowOffset,
-                                    onShadowOffsetChange = { viewModel.setSeekbarShadowOffset(it) },
-                                    shadowOpacity = seekbarShadowOpacity,
-                                    onShadowOpacityChange = { viewModel.setSeekbarShadowOpacity(it) },
-                                    primaryOpacity = seekbarPrimaryOpacity,
-                                    onPrimaryOpacityChange = { viewModel.setSeekbarPrimaryOpacity(it) },
-                                    thumbRadius = seekbarThumbRadius,
-                                    onThumbRadiusChange = { viewModel.setSeekbarThumbRadius(it) },
-                                    unplayedStroke = seekbarUnplayedStroke,
-                                    onUnplayedStrokeChange = { viewModel.setSeekbarUnplayedStroke(it) },
-                                    bloomDuration = seekbarBloomDuration,
-                                    onBloomDurationChange = { viewModel.setSeekbarBloomDuration(it) }
-                                )
-                            }
-                        }
-                        composable(
-                            route = "jiggle_physics",
-                            enterTransition = { NavTransitions.DetailEnter },
-                            exitTransition = { NavTransitions.DetailExit },
-                            popEnterTransition = { NavTransitions.DetailPopEnter },
-                            popExitTransition = { NavTransitions.DetailPopExit }
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                                JigglePhysicsScreen(
-                                    physicsMass = physicsMass,
-                                    physicsStiffness = physicsStiffness,
-                                    physicsDampingRatio = physicsDampingRatio,
-                                    physicsAmplitude = physicsAmplitude,
-                                    physicsGravity = physicsGravity,
-                                    onPhysicsMassChange = { viewModel.setPhysicsMass(it) },
-                                    onPhysicsStiffnessChange = { viewModel.setPhysicsStiffness(it) },
-                                    onPhysicsDampingRatioChange = { viewModel.setPhysicsDampingRatio(it) },
-                                    onPhysicsAmplitudeChange = { viewModel.setPhysicsAmplitude(it) },
-                                    onPhysicsGravityChange = { viewModel.setPhysicsGravity(it) },
-                                    onNavigateBack = { navController.popBackStack() }
-                                )
-                            }
-                        }
                         composable(
                             route = "equalizer",
                             enterTransition = { NavTransitions.SheetEnter },

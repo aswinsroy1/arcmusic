@@ -38,9 +38,6 @@ import com.aeswox.arcmusic.db.entities.Playlist
 
 @Composable
 fun SettingsScreen(
-    tintTransparency: Float,
-    noiseFactor: Float,
-    glowIntensity: Float,
     themeMode: ThemeMode,
     heroCardPlayingStateEnabled: Boolean,
     nowPlayingStyle: NowPlayingStyle,
@@ -51,13 +48,22 @@ fun SettingsScreen(
     onHeroCardPlayingStateEnabledChange: (Boolean) -> Unit,
     heroCardIncludeArtistsAndAlbums: Boolean = false,
     onHeroCardIncludeArtistsAndAlbumsChange: (Boolean) -> Unit,
+    dynamicColorsEnabled: Boolean = true,
+    onDynamicColorsEnabledChange: (Boolean) -> Unit,
+    autoplayEnabled: Boolean = false,
+    onAutoplayEnabledChange: (Boolean) -> Unit,
+    skipSilenceEnabled: Boolean = false,
+    onSkipSilenceEnabledChange: (Boolean) -> Unit,
+    resumeOnBluetoothEnabled: Boolean = false,
+    onResumeOnBluetoothEnabledChange: (Boolean) -> Unit,
+    audioDuckingEnabled: Boolean = true,
+    onAudioDuckingEnabledChange: (Boolean) -> Unit,
     onNowPlayingStyleChange: (NowPlayingStyle) -> Unit,
     onLastFmApiKeyChange: (String) -> Unit,
     onFanartTvApiKeyChange: (String) -> Unit,
     onGeminiApiKeyChange: (String) -> Unit,
     coilDiskCacheLimitMb: Int,
     onCoilDiskCacheLimitMbChange: (Int) -> Unit,
-    onNavigateToAppearance: () -> Unit,
     onNavigateToWaveProperties: () -> Unit,
     onNavigateToJigglePhysics: () -> Unit,
     onNavigateToEqualizer: () -> Unit,
@@ -243,17 +249,56 @@ fun SettingsScreen(
                 item {
                     SettingsGroup(title = "PLAYBACK") {
                         SettingsItem(icon = Icons.Outlined.MusicNote, text = "Playback", enabled = false)
-                        SettingsItem(icon = Icons.Outlined.GraphicEq, text = "Audio quality", enabled = false)
                         SettingsItem(icon = Icons.Outlined.Tune, text = "Equalizer", onClick = onNavigateToEqualizer)
-                        SettingsItem(icon = com.aeswox.arcmusic.ui.components.HugeIcons.SleepTimer, text = "Sleep timer", enabled = false)
-                        SettingsItem(icon = Icons.Outlined.Shuffle, text = "Crossfade", trailingText = "Off", enabled = false)
+                        SettingsItem(
+                            icon = HugeIcons.Autoplay,
+                            text = "Auto-play",
+                            trailingContent = {
+                                Switch(
+                                    checked = autoplayEnabled,
+                                    onCheckedChange = { onAutoplayEnabledChange(it) }
+                                )
+                            },
+                            showArrow = false
+                        )
+                        SettingsItem(
+                            icon = Icons.Outlined.SkipNext,
+                            text = "Skip Silence",
+                            trailingContent = {
+                                Switch(
+                                    checked = skipSilenceEnabled,
+                                    onCheckedChange = { onSkipSilenceEnabledChange(it) }
+                                )
+                            },
+                            showArrow = false
+                        )
+                        SettingsItem(
+                            icon = Icons.Outlined.Bluetooth,
+                            text = "Resume on Bluetooth connect",
+                            trailingContent = {
+                                Switch(
+                                    checked = resumeOnBluetoothEnabled,
+                                    onCheckedChange = { onResumeOnBluetoothEnabledChange(it) }
+                                )
+                            },
+                            showArrow = false
+                        )
+                        SettingsItem(
+                            icon = Icons.Outlined.VolumeDown,
+                            text = "Audio ducking on notifications",
+                            trailingContent = {
+                                Switch(
+                                    checked = audioDuckingEnabled,
+                                    onCheckedChange = { onAudioDuckingEnabledChange(it) }
+                                )
+                            },
+                            showArrow = false
+                        )
                     }
                 }
                 
                 item {
                     SettingsGroup(title = "APPEARANCE") {
-                        SettingsItem(icon = Icons.Outlined.Brush, text = "Appearance", onClick = onNavigateToAppearance)
-                        SettingsItem(icon = Icons.Outlined.GraphicEq, text = "Wave properties", onClick = onNavigateToWaveProperties)
                         SettingsItem(
                             icon = com.aeswox.arcmusic.ui.components.HugeIcons.Moon, 
 
@@ -268,19 +313,16 @@ fun SettingsScreen(
                             },
                             showArrow = false
                         )
-                        SettingsItem(icon = Icons.Outlined.Animation, text = "Jiggle physics", onClick = onNavigateToJigglePhysics)
                         SettingsItem(
                             icon = Icons.Outlined.LightMode,  
                             text = "Dynamic colors", 
                             trailingContent = {
                                 Switch(
-                                    checked = true, 
-                                    onCheckedChange = {},
-                                    enabled = false
+                                    checked = dynamicColorsEnabled, 
+                                    onCheckedChange = { onDynamicColorsEnabledChange(it) }
                                 )
                             },
-                            showArrow = false,
-                            enabled = false
+                            showArrow = false
                         )
                         SettingsItem(
                             icon = Icons.Outlined.PlayCircleOutline,
@@ -304,29 +346,6 @@ fun SettingsScreen(
                             },
                             showArrow = false
                         )
-                        SettingsItem(
-                            icon = Icons.Outlined.MusicNote,
-                            text = "Now Playing Style",
-                            onClick = onNavigateToNowPlayingStyleSettings,
-                            showArrow = true,
-                            trailingContent = {
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.8f)
-                                        ),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    LyricsStyleChip(
-                                        label = "Arc",
-                                        selected = nowPlayingStyle == NowPlayingStyle.ARC,
-                                        onClick = { onNowPlayingStyleChange(NowPlayingStyle.ARC) }
-                                    )
-                                }
-                            }
-                        )
-
                         SettingsItem(
                             icon = Icons.Outlined.PlayCircle,
                             text = "Canvas",

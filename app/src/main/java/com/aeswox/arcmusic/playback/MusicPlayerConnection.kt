@@ -310,6 +310,18 @@ class MusicPlayerConnection @Inject constructor(
         }
     }
     
+    fun appendToQueue(mediaItem: MediaItem) {
+        mediaController?.addMediaItem(mediaItem)
+    }
+
+    fun removeQueueItem(index: Int) {
+        mediaController?.removeMediaItem(index)
+    }
+    
+    fun getMediaItemCount(): Int {
+        return mediaController?.mediaItemCount ?: 0
+    }
+    
     fun clearQueue() {
         mediaController?.clearMediaItems()
         _currentQueue.value = emptyList()

@@ -236,10 +236,13 @@ class MusicViewModel @Inject constructor(
     val homescreenRecommendations: StateFlow<List<GrowthCard>>
     
     val heroCardPlayingStateEnabled: StateFlow<Boolean> = settingsRepository.heroCardPlayingStateEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
     val heroCardIncludeArtistsAndAlbums: StateFlow<Boolean> = settingsRepository.heroCardIncludeArtistsAndAlbums
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val dynamicColorsEnabled: StateFlow<Boolean> = settingsRepository.dynamicColorsEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val developerOptionsUnlocked: StateFlow<Boolean> = settingsRepository.developerOptionsUnlocked
         .stateIn(viewModelScope, SharingStarted.Lazily, false)
@@ -284,6 +287,12 @@ class MusicViewModel @Inject constructor(
     fun setDeveloperOptionsUnlocked(unlocked: Boolean) {
         viewModelScope.launch {
             settingsRepository.setDeveloperOptionsUnlocked(unlocked)
+        }
+    }
+
+    fun setDynamicColorsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setDynamicColorsEnabled(enabled)
         }
     }
 
@@ -1696,21 +1705,98 @@ class MusicViewModel @Inject constructor(
             }
         }
 
-        // ── Autoplay: continue playing when the queue finishes ────────────────
+        // ── Autoplay: Queue Manager Logic ────────────────
+        var isResolvingAutoplay = false
+        val recentAutoplayArtists = mutableListOf<String>()
+        val MAX_QUEUE_SIZE = 40
+
         viewModelScope.launch {
-            musicPlayerConnection.playbackState.collect { state ->
-                if (state == com.aeswox.arcmusic.playback.PlaybackState.ENDED &&
-                    autoplayEnabled.value
+            musicPlayerConnection.currentMediaItemIndex.collect { currentIndex ->
+                val currentQueueSize = musicPlayerConnection.getMediaItemCount()
+                if (currentQueueSize == 0) return@collect
+                
+                // Trigger when we are on the last item in the queue
+                if (currentIndex == currentQueueSize - 1 && 
+                    autoplayEnabled.value && 
+                    !isResolvingAutoplay &&
+                    musicPlayerConnection.repeatMode.value != androidx.media3.common.Player.REPEAT_MODE_ALL
                 ) {
+                    isResolvingAutoplay = true
+                    
+                    // Maintain max queue size (Sliding Window)
+                    if (currentQueueSize >= MAX_QUEUE_SIZE) {
+                        musicPlayerConnection.removeQueueItem(0)
+                    }
+
+                    // Vibe Matching logic
                     val alreadyInQueue = musicPlayerConnection.currentQueue.value
                         .map { it.mediaId }
                         .toSet()
-                    val candidate = randomPicks.value
-                        .filter { it.id !in alreadyInQueue && it.filePath.isNotEmpty() }
-                        .firstOrNull()
-                    if (candidate != null) {
-                        setCurrentlyPlaying(candidate)
+                        
+                    val currentTrack = _currentlyPlaying.value
+                    val currentGenre = currentTrack?.genre?.takeIf { it.isNotBlank() && it != "Unknown" }
+                    val currentArtist = currentTrack?.artist?.takeIf { it.isNotBlank() && it != "Unknown" }
+                    
+                    // Get all tracks safely
+                    val tracks = runCatching { repository.getAllTracks().first() }.getOrNull() ?: emptyList()
+                    
+                    // Filter out already in queue and bad files
+                    val validTracks = tracks.filter { it.id !in alreadyInQueue && it.filePath.isNotEmpty() }
+                    
+                    var candidate: Track? = null
+                    
+                    // Tier 1: Same Genre, Different Artist (not recently played)
+                    if (currentGenre != null) {
+                        val tier1 = validTracks.filter { 
+                            it.genre == currentGenre && 
+                            it.artist != currentArtist &&
+                            !recentAutoplayArtists.contains(it.artist)
+                        }
+                        candidate = tier1.randomOrNull()
                     }
+                    
+                    // Tier 2: Different Artist (not recently played)
+                    if (candidate == null) {
+                        val tier2 = validTracks.filter { 
+                            it.artist != currentArtist &&
+                            !recentAutoplayArtists.contains(it.artist)
+                        }
+                        candidate = tier2.randomOrNull()
+                    }
+                    
+                    // Tier 3: Random Track
+                    if (candidate == null) {
+                        candidate = validTracks.randomOrNull()
+                    }
+                    
+                    if (candidate != null) {
+                        // Keep track of recent artists for cooldown
+                        val candidateArtist = candidate.artist ?: "Unknown"
+                        recentAutoplayArtists.add(candidateArtist)
+                        if (recentAutoplayArtists.size > 5) {
+                            recentAutoplayArtists.removeAt(0)
+                        }
+                        
+                        val mediaItem = androidx.media3.common.MediaItem.Builder()
+                            .setUri(android.net.Uri.fromFile(java.io.File(candidate.filePath)))
+                            .setMediaId(candidate.id)
+                            .setMediaMetadata(
+                                androidx.media3.common.MediaMetadata.Builder()
+                                    .setTitle(candidate.title)
+                                    .setArtist(candidate.artist)
+                                    .setArtworkUri(candidate.artworkUri?.let { android.net.Uri.parse(it) })
+                                    .setExtras(android.os.Bundle().apply {
+                                        putLong("durationMs", candidate.durationMs)
+                                    })
+                                    .build()
+                            )
+                            .build()
+                        musicPlayerConnection.appendToQueue(mediaItem)
+                    }
+                    
+                    // Unlock after a tiny delay to ensure ExoPlayer processes the queue update
+                    kotlinx.coroutines.delay(500)
+                    isResolvingAutoplay = false
                 }
             }
         }
@@ -2130,6 +2216,36 @@ $catalog"""
     fun toggleAutoplay() {
         viewModelScope.launch {
             settingsRepository.setAutoplayEnabled(!autoplayEnabled.value)
+        }
+    }
+
+    val skipSilenceEnabled: StateFlow<Boolean> = settingsRepository.skipSilenceEnabled.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), false
+    )
+
+    fun setSkipSilenceEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setSkipSilenceEnabled(enabled)
+        }
+    }
+
+    val resumeOnBluetoothEnabled: StateFlow<Boolean> = settingsRepository.resumeOnBluetoothEnabled.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), false
+    )
+
+    fun setResumeOnBluetoothEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setResumeOnBluetoothEnabled(enabled)
+        }
+    }
+
+    val audioDuckingEnabled: StateFlow<Boolean> = settingsRepository.audioDuckingEnabled.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), true
+    )
+
+    fun setAudioDuckingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAudioDuckingEnabled(enabled)
         }
     }
 

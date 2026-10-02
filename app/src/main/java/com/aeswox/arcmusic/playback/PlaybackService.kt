@@ -11,6 +11,12 @@ import androidx.media3.session.MediaSessionService
 import com.aeswox.arcmusic.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
+import com.aeswox.arcmusic.data.SettingsRepository
 
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
@@ -25,6 +31,11 @@ class PlaybackService : MediaSessionService() {
 
     @Inject
     lateinit var equalizerManager: EqualizerManager
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
@@ -104,6 +115,12 @@ class PlaybackService : MediaSessionService() {
         val notificationProvider = androidx.media3.session.DefaultMediaNotificationProvider.Builder(this).build()
         notificationProvider.setSmallIcon(com.aeswox.arcmusic.R.drawable.ic_notification)
         setMediaNotificationProvider(notificationProvider)
+
+        serviceScope.launch {
+            settingsRepository.skipSilenceEnabled.collectLatest { enabled ->
+                player.skipSilenceEnabled = enabled
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {

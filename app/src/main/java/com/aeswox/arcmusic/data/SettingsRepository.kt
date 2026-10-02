@@ -69,6 +69,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     private val CANVAS_CACHE_LIMIT_MB_KEY = intPreferencesKey("canvas_cache_limit_mb")
     private val HERO_CARD_PLAYING_STATE_ENABLED_KEY = booleanPreferencesKey("hero_card_playing_state_enabled")
     private val HERO_CARD_INCLUDE_ARTISTS_ALBUMS_KEY = booleanPreferencesKey("hero_card_include_artists_albums")
+    private val DYNAMIC_COLORS_ENABLED_KEY = booleanPreferencesKey("dynamic_colors_enabled")
 
     private val MASS_KEY = floatPreferencesKey("physics_mass")
     private val STIFFNESS_KEY = floatPreferencesKey("physics_stiffness")
@@ -86,6 +87,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     private val SEEKBAR_UNPLAYED_STROKE_KEY = floatPreferencesKey("seekbar_unplayed_stroke")
     private val SEEKBAR_BLOOM_DURATION_KEY = floatPreferencesKey("seekbar_bloom_duration")
     private val AUTOPLAY_ENABLED_KEY = booleanPreferencesKey("autoplay_enabled")
+    private val SKIP_SILENCE_ENABLED_KEY = booleanPreferencesKey("skip_silence_enabled")
+    private val RESUME_ON_BLUETOOTH_ENABLED_KEY = booleanPreferencesKey("resume_on_bluetooth_enabled")
+    private val AUDIO_DUCKING_ENABLED_KEY = booleanPreferencesKey("audio_ducking_enabled")
     private val APP_ICON_VARIANT_KEY = stringPreferencesKey("app_icon_variant")
     private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
     private val DEVELOPER_OPTIONS_UNLOCKED_KEY = booleanPreferencesKey("developer_options_unlocked")
@@ -140,6 +144,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         preferences[CANVAS_ENABLED_KEY] ?: true
     }
     
+    val dynamicColorsEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[DYNAMIC_COLORS_ENABLED_KEY] ?: true
+    }
+    
     val developerOptionsUnlocked: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[DEVELOPER_OPTIONS_UNLOCKED_KEY] ?: false
     }
@@ -149,7 +157,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     }
 
     val heroCardPlayingStateEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[HERO_CARD_PLAYING_STATE_ENABLED_KEY] ?: false
+        preferences[HERO_CARD_PLAYING_STATE_ENABLED_KEY] ?: true
     }
 
     val heroCardIncludeArtistsAndAlbums: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -165,7 +173,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     }
     
     val glowIntensity: Flow<Float> = context.dataStore.data.map { preferences ->
-        preferences[GLOW_INTENSITY_KEY] ?: 0.6f
+        preferences[GLOW_INTENSITY_KEY] ?: 0.38f
     }
     
     val physicsMass: Flow<Float> = context.dataStore.data.map { preferences ->
@@ -413,6 +421,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         }
     }
 
+    suspend fun setDynamicColorsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[DYNAMIC_COLORS_ENABLED_KEY] = enabled
+        }
+    }
+
     suspend fun setDeveloperOptionsUnlocked(unlocked: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[DEVELOPER_OPTIONS_UNLOCKED_KEY] = unlocked
@@ -449,9 +463,39 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         preferences[AUTOPLAY_ENABLED_KEY] ?: false
     }
 
+    val skipSilenceEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[SKIP_SILENCE_ENABLED_KEY] ?: false
+    }
+
+    val resumeOnBluetoothEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[RESUME_ON_BLUETOOTH_ENABLED_KEY] ?: false
+    }
+
+    val audioDuckingEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[AUDIO_DUCKING_ENABLED_KEY] ?: true
+    }
+
     suspend fun setAutoplayEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[AUTOPLAY_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setSkipSilenceEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[SKIP_SILENCE_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setResumeOnBluetoothEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[RESUME_ON_BLUETOOTH_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setAudioDuckingEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[AUDIO_DUCKING_ENABLED_KEY] = enabled
         }
     }
 }
