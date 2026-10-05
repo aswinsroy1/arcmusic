@@ -2,11 +2,33 @@ name: Publish Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+    paths:
+      - 'app/build.gradle.kts'
 
 jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          TAG="v$VERSION"
+          if git ls-remote --tags origin refs/tags/$TAG | grep -q $TAG; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "version=$TAG" >> $GITHUB_OUTPUT
+          fi
+
   release:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,6 +38,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Create and Push Tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ needs.check-version.outputs.version }}
+          git push origin ${{ needs.check-version.outputs.version }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -40,7 +69,7 @@ jobs:
 
       - name: Generate Changelog
         run: |
-          echo "### 🚀 What's New in ${{ github.ref_name }}" > changelog.txt
+          echo "### 🚀 What's New in ${{ needs.check-version.outputs.version }}" > changelog.txt
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -z "$PREV_TAG" ]; then
             git log -n 5 --pretty=format:"* %s%n%b" | grep -v -i '^\* Bump' >> changelog.txt
@@ -55,7 +84,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ github.ref_name }} \
-            --title "Release ${{ github.ref_name }}" \
+          gh release create ${{ needs.check-version.outputs.version }} \
+            --title "Release ${{ needs.check-version.outputs.version }}" \
             --notes-file changelog.txt \
             app/build/outputs/apk/release/*.apk
