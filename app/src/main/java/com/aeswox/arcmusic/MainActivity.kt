@@ -1,6 +1,5 @@
-﻿package com.aeswox.arcmusic
+package com.aeswox.arcmusic
 
-import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import com.aeswox.arcmusic.sharing.ReceiveScreen
 import com.aeswox.arcmusic.sharing.ShareScreen
 import com.aeswox.arcmusic.db.entities.getQualityBadgeResId
@@ -360,7 +359,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     
-                    // Raw (target) offset Ã¢â‚¬â€ driven by nav-bar visibility and library selection mode
+                    // Raw (target) offset â€” driven by nav-bar visibility and library selection mode
                     val rawBottomOffset = if (isNavBarVisible || isLibrarySelectionMode) {
                         90.dp + innerPadding.calculateBottomPadding()
                     } else {
@@ -1159,7 +1158,7 @@ class MainActivity : ComponentActivity() {
                     com.aeswox.arcmusic.ui.components.GlobalProgressOverlay(currentRoute = currentRoute)
                                         } // Box (applyHazeAndBackdrop)
                                         
-                                        // â”€â”€ Gradient scrim behind bottom chrome â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                                        // ── Gradient scrim behind bottom chrome ──────────────────────────────
                                         // Mirrors Rhythm's LocalNavigation approach: the scrim height is animated
                                         // so it grows/shrinks as the nav bar and miniplayer come and go.
                                         val miniPlayerVisible = isMiniPlayerVisible && currentlyPlaying != null
@@ -1191,7 +1190,7 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.align(Alignment.BottomCenter)
                                         )
 
-                                        // Ã¢â€â‚¬Ã¢â€â‚¬ Navigation bar (animated show/hide) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+                                        // â”€â”€ Navigation bar (animated show/hide) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                                         // ENTER: slide up from below + fade with a medium-bouncy spring (satisfying pop).
                                         // EXIT:  slide down + fade with a no-bounce spring (snappy disappear).
                                         AnimatedVisibility(
@@ -1534,7 +1533,7 @@ fun MusicHomeScreen(
                                             )
                                             Spacer(modifier = Modifier.height(32.dp))
                                             if (isScanning) {
-                                                ArcProgressIndicator(
+                                                CircularProgressIndicator(
                                                     color = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.padding(12.dp)
                                                 )
@@ -1693,16 +1692,16 @@ fun HeroSection(
         val enriched = mutableListOf<com.aeswox.arcmusic.data.model.SyncedLine>()
         val gapThreshold = 10_000
         if (rawSyncedLines.first().time > gapThreshold)
-            enriched.add(com.aeswox.arcmusic.data.model.SyncedLine(time = 2000, line = "â— â— â—"))
+            enriched.add(com.aeswox.arcmusic.data.model.SyncedLine(time = 2000, line = "● ● ●"))
         for (i in 0 until rawSyncedLines.size - 1) {
             enriched.add(rawSyncedLines[i])
             if (rawSyncedLines[i + 1].time - rawSyncedLines[i].time > gapThreshold)
-                enriched.add(com.aeswox.arcmusic.data.model.SyncedLine(time = rawSyncedLines[i].time + 5000, line = "â— â— â—"))
+                enriched.add(com.aeswox.arcmusic.data.model.SyncedLine(time = rawSyncedLines[i].time + 5000, line = "● ● ●"))
         }
         if (rawSyncedLines.isNotEmpty()) {
             enriched.add(rawSyncedLines.last())
             if (duration > 0 && duration - rawSyncedLines.last().time > gapThreshold)
-                enriched.add(com.aeswox.arcmusic.data.model.SyncedLine(time = rawSyncedLines.last().time + 5000, line = "â— â— â—"))
+                enriched.add(com.aeswox.arcmusic.data.model.SyncedLine(time = rawSyncedLines.last().time + 5000, line = "● ● ●"))
         }
         enriched.toList()
     }
@@ -2318,7 +2317,7 @@ fun ListeningStatsSection(
         weeklyHours > 0 && weeklyMins > 0 -> "${weeklyHours}.${weeklyMins / 6} hrs"
         weeklyHours > 0                   -> "${weeklyHours} hrs"
         weeklyMinutes > 0                 -> "${weeklyMinutes} min"
-        else                              -> "Ã¢â‚¬â€"
+        else                              -> "â€”"
     }
 
     Column(
@@ -2339,7 +2338,7 @@ fun ListeningStatsSection(
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
 
-                // Ã¢â€â‚¬Ã¢â€â‚¬ Row 1: Top Artist | Favorite Genre Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+                // â”€â”€ Row 1: Top Artist | Favorite Genre â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -2402,7 +2401,7 @@ fun ListeningStatsSection(
                             }
                         } else {
                             Text(
-                                text = "Ã¢â‚¬â€",
+                                text = "â€”",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -2412,7 +2411,7 @@ fun ListeningStatsSection(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Ã¢â€â‚¬Ã¢â€â‚¬ Row 2: Weekly Listening | Mini bar chart Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+                // â”€â”€ Row 2: Weekly Listening | Mini bar chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -2849,7 +2848,7 @@ fun AiSearchLoadingState(modifier: Modifier = Modifier) {
             .padding(vertical = 64.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ArcProgressIndicator(
+        CircularProgressIndicator(
             color = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -3440,7 +3439,7 @@ modifier = Modifier.physicsBounceOverscroll(isHorizontal = true),
         ) {
             items(albums) { album ->
                 val fallbackImage = R.drawable.ic_default_artwork
-                val yearStr = if (album.year != null && album.year > 0) "${album.year} Ã¢â‚¬Â¢ " else ""
+                val yearStr = if (album.year != null && album.year > 0) "${album.year} â€¢ " else ""
                 val subtitle = "$yearStr${album.trackCount} songs"
                 AlbumResultItem(album.title, subtitle, album.artworkUri ?: fallbackImage, onClick = { onNavigateToAlbumDetails(album.title) })
             }
@@ -3703,7 +3702,7 @@ fun CollectionHealthSection(healthScore: Int = 100, modifier: Modifier = Modifie
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(64.dp)) {
-                        ArcProgressIndicator(
+                        CircularProgressIndicator(
                             progress = { healthScore / 100f },
                             modifier = Modifier.fillMaxSize(),
                             color = MaterialTheme.colorScheme.onSurface,
@@ -3828,5 +3827,4 @@ fun SearchSuggestionChip(label: String) {
         )
     }
 }
-
 

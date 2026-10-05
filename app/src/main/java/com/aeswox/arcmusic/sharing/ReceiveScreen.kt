@@ -1,6 +1,5 @@
-﻿package com.aeswox.arcmusic.sharing
+package com.aeswox.arcmusic.sharing
 
-import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -87,7 +86,7 @@ fun ReceiveScreen(
         )
     }
 
-    // â”€â”€ Permissions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Permissions ──────────────────────────────────────────────────────────
     val permissionsList = mutableListOf<String>()
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
         permissionsList += listOf(
@@ -206,7 +205,7 @@ fun ReceiveScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Header ───────────────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -277,7 +276,7 @@ fun ReceiveScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // â”€â”€ Background Status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Background Status ───────────────────────────────────────────────
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.graphicsLayer(alpha = bgAlpha)
@@ -304,7 +303,7 @@ fun ReceiveScreen(
             Spacer(modifier = Modifier.height(64.dp))
         }
         
-        // â”€â”€ Custom Persistent Overlay Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Custom Persistent Overlay Card ─────────────────────────────────
         var visibleRequest by remember { mutableStateOf<com.aeswox.arcmusic.sharing.ConnectionRequest?>(null) }
         
         LaunchedEffect(connectionRequest) {
@@ -480,7 +479,7 @@ fun ReceiveScreen(
                                                 }
                                             }
                                             
-                                            com.aeswox.arcmusic.ui.components.ArcProgressIndicator(
+                                            androidx.compose.material3.CircularProgressIndicator(
                                                 progress = { animatedProgress },
                                                 modifier = Modifier.fillMaxSize(),
                                                 strokeWidth = 6.dp,
@@ -521,7 +520,7 @@ fun ReceiveScreen(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.padding(24.dp)
                                     ) {
-                                        com.aeswox.arcmusic.ui.components.ArcProgressIndicator(
+                                        androidx.compose.material3.CircularProgressIndicator(
                                             modifier = Modifier.size(48.dp),
                                             color = MaterialTheme.colorScheme.primary,
                                             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
@@ -616,4 +615,3 @@ fun ReceiveScreen(
         }
     }
 }
-

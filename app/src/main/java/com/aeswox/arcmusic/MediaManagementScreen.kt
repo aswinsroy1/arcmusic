@@ -1,6 +1,5 @@
-﻿package com.aeswox.arcmusic
+package com.aeswox.arcmusic
 
-import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -90,7 +89,7 @@ fun MediaManagementScreen(
                 contentPadding = PaddingValues(top = 24.dp, bottom = 180.dp, start = 24.dp, end = 24.dp),
                 modifier = Modifier.physicsBounceOverscroll().fillMaxSize()
             ) {
-                // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── Header ─────────────────────────────────────────────────────────
                 item {
                     Row(
                         modifier = Modifier
@@ -110,7 +109,7 @@ fun MediaManagementScreen(
                     }
                 }
 
-                // â”€â”€ Scan progress card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── Scan progress card ──────────────────────────────────────────────
                 item {
                     AnimatedVisibility(
                         visible = scanProgress.isRunning || scanProgress.isCompleted,
@@ -136,7 +135,7 @@ fun MediaManagementScreen(
                                         modifier = Modifier.size(20.dp)
                                     )
                                 } else {
-                                    ArcProgressIndicator(
+                                    CircularProgressIndicator(
                                         modifier = Modifier.size(20.dp),
                                         strokeWidth = 2.dp,
                                         color = MaterialTheme.colorScheme.primary
@@ -201,7 +200,7 @@ fun MediaManagementScreen(
                     }
                 }
 
-                // â”€â”€ LIBRARY ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── LIBRARY ACTIONS ────────────────────────────────────────────────
                 item {
                     Text(
                         text = "LIBRARY ACTIONS",
@@ -229,7 +228,7 @@ fun MediaManagementScreen(
                         ) {
                             if (scanProgress.isRunning &&
                                 scanProgress.phase != com.aeswox.arcmusic.db.ScanPhase.CLEARING_DATABASE) {
-                                ArcProgressIndicator(
+                                CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.surface
@@ -246,7 +245,7 @@ fun MediaManagementScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(text = "Scan Media", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = "Full scan â€“ look for all files in selected folders",
+                                text = "Full scan – look for all files in selected folders",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -310,7 +309,7 @@ fun MediaManagementScreen(
                         ) {
                             if (scanProgress.isRunning &&
                                 scanProgress.phase == com.aeswox.arcmusic.db.ScanPhase.PROCESSING_FILES) {
-                                ArcProgressIndicator(
+                                CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -355,7 +354,7 @@ fun MediaManagementScreen(
                         ) {
                             if (scanProgress.isRunning &&
                                 scanProgress.phase == com.aeswox.arcmusic.db.ScanPhase.CLEARING_DATABASE) {
-                                ArcProgressIndicator(
+                                CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
                                     strokeWidth = 2.dp,
                                     color = Color(0xFFC62828)
@@ -382,7 +381,7 @@ fun MediaManagementScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                 }
 
-                // â”€â”€ SCAN BEHAVIOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── SCAN BEHAVIOR ──────────────────────────────────────────────────
                 item {
                     Text(
                         text = "SCAN BEHAVIOR",
@@ -482,7 +481,7 @@ fun MediaManagementScreen(
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.surfaceVariant)
 
-                        // Extract artists from title (e.g. "Song (ft. Artist)" â†’ split)
+                        // Extract artists from title (e.g. "Song (ft. Artist)" → split)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
@@ -505,7 +504,7 @@ fun MediaManagementScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                 }
 
-                // â”€â”€ REFINEMENT RULES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── REFINEMENT RULES ────────────────────────────────────────────────
                 item {
                     Text(
                         text = "REFINEMENT RULES",
@@ -652,7 +651,7 @@ fun MediaManagementScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                 }
 
-                // â”€â”€ FOLDER MANAGEMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── FOLDER MANAGEMENT ───────────────────────────────────────────────
                 item {
                     Text(
                         text = "FOLDER MANAGEMENT",
@@ -699,4 +698,3 @@ fun MediaManagementScreen(
         }
     }
 }
-

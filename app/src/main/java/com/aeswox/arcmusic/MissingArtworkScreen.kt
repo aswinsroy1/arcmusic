@@ -1,6 +1,5 @@
-﻿package com.aeswox.arcmusic
+package com.aeswox.arcmusic
 
-import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -115,7 +114,7 @@ fun MissingArtworkScreen(
                 modifier = Modifier.padding(bottom = fabBottomPadding)
             ) {
                 if (isAutoFinding) {
-                    ArcProgressIndicator(
+                    CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
@@ -258,4 +257,3 @@ fun MissingArtworkTrackItem(
         }
     }
 }
-
