@@ -1,5 +1,6 @@
-package com.aeswox.arcmusic
+﻿package com.aeswox.arcmusic
 
+import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,7 +35,7 @@ import coil.compose.AsyncImage
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.material3.CircularProgressIndicator
+import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -206,7 +207,7 @@ fun MissingLyricsScreen(
                         modifier = Modifier.weight(1f).height(56.dp)
                     ) {
                         if (isRefreshing) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onSurface, strokeWidth = 2.dp)
+                            ArcProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onSurface, strokeWidth = 2.dp)
                         } else {
                             Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -226,7 +227,7 @@ fun MissingLyricsScreen(
                         modifier = Modifier.weight(1f).height(56.dp)
                     ) {
                         if (isSyncing) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                            ArcProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                         } else {
                             Icon(imageVector = HugeIcons.Download, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -345,7 +346,7 @@ fun MissingLyricTrackItem(
                     ?: "Unknown"
                     
                 Text(
-                    text = "$subtitle •",
+                    text = "$subtitle â€¢",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
@@ -417,3 +418,4 @@ fun MissingLyricTrackItem(
         }
     }
 }
+

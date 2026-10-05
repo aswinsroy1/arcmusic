@@ -1,5 +1,6 @@
-package com.aeswox.arcmusic.ui.screens
+﻿package com.aeswox.arcmusic.ui.screens
 
+import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import android.Manifest
 import android.os.Build
 import androidx.compose.animation.*
@@ -579,7 +580,7 @@ fun LibraryScanningPage(
             modifier = Modifier.size(200.dp),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(
+            ArcProgressIndicator(
                 progress = { 
                     if (scanProgress.isCompleted) 1f 
                     else if (scanProgress.total > 0) scanProgress.current.toFloat() / scanProgress.total.toFloat() 
@@ -625,3 +626,4 @@ fun LibraryScanningPage(
         }
     }
 }
+

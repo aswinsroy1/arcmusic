@@ -1,5 +1,6 @@
-package com.aeswox.arcmusic.ui.components
+﻿package com.aeswox.arcmusic.ui.components
 
+import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -98,7 +99,7 @@ fun GlobalProgressOverlay(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     if (isScanning) {
-                        CircularProgressIndicator(
+                        ArcProgressIndicator(
                             progress = { scanProgress.fraction },
                             modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.primary,
@@ -120,7 +121,7 @@ fun GlobalProgressOverlay(
                             }
                         }
                     } else if (isTransferring) {
-                        CircularProgressIndicator(
+                        ArcProgressIndicator(
                             progress = { transferProgress },
                             modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.primary,
@@ -152,3 +153,4 @@ fun GlobalProgressOverlay(
         }
     }
 }
+

@@ -1,5 +1,6 @@
-package com.aeswox.arcmusic
+﻿package com.aeswox.arcmusic
 
+import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -136,7 +137,7 @@ fun CollectionHealthScoreSection(score: Int) {
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(240.dp)
         ) {
-            CircularProgressIndicator(
+            ArcProgressIndicator(
                 progress = { score / 100f },
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.onSurface,
@@ -448,5 +449,6 @@ fun CollectionHealthDuplicatesCard(groupCount: Int, onReviewClick: () -> Unit) {
         }
     }
 }
+
 
 

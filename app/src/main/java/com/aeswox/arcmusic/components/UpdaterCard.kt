@@ -1,5 +1,6 @@
-package com.aeswox.arcmusic.components
+﻿package com.aeswox.arcmusic.components
 
+import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -123,7 +124,7 @@ fun UpdaterCard(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator(
+                        ArcProgressIndicator(
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(48.dp)
                         )
@@ -321,3 +322,4 @@ fun parseMarkdown(text: String): AnnotatedString {
         append(text.substring(currentIndex))
     }
 }
+

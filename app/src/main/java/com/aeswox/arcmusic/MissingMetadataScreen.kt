@@ -1,5 +1,6 @@
-package com.aeswox.arcmusic
+﻿package com.aeswox.arcmusic
 
+import com.aeswox.arcmusic.ui.components.ArcProgressIndicator
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -123,7 +124,7 @@ fun MissingMetadataScreen(
                             .height(56.dp)
                     ) {
                         if (isFetchingMetadata) {
-                            androidx.compose.material3.CircularProgressIndicator(
+                            com.aeswox.arcmusic.ui.components.ArcProgressIndicator(
                                 modifier = Modifier.size(24.dp),
                                 color = MaterialTheme.colorScheme.background,
                                 strokeWidth = 2.dp
@@ -219,7 +220,7 @@ fun MissingMetadataItem(track: Track, onNavigateToEditMetadata: (String) -> Unit
                     ?: "Unknown"
                     
                 Text(
-                    text = "$subtitle •",
+                    text = "$subtitle â€¢",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
@@ -286,3 +287,4 @@ fun getMissingMetadataReason(track: Track): String {
         else -> "Missing Tags"
     }
 }
+
