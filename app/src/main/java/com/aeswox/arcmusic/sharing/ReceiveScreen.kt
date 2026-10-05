@@ -190,6 +190,13 @@ fun ReceiveScreen(
         }
     }
 
+    val shouldShowCard = connectionRequest != null ||
+        sharingState == SharingState.CONNECTED ||
+        sharingState == SharingState.TRANSFERRING ||
+        sharingState == SharingState.COMPLETED
+        
+    val bgAlpha by androidx.compose.animation.core.animateFloatAsState(targetValue = if (shouldShowCard) 0f else 1f, label = "bgAlpha")
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -268,22 +275,27 @@ fun ReceiveScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             // ── Background Status ───────────────────────────────────────────────
-            Text(
-                text = "Ready to receive...",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Anyone nearby running Arc Music\ncan share with you while you're on this screen.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 40.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.graphicsLayer(alpha = bgAlpha)
+            ) {
+                Text(
+                    text = "Ready to receive...",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 28.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Anyone nearby running Arc Music\ncan share with you while you're on this screen.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 40.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.height(64.dp))
@@ -298,11 +310,6 @@ fun ReceiveScreen(
             }
         }
         
-        val shouldShowCard = connectionRequest != null ||
-            sharingState == SharingState.CONNECTED ||
-            sharingState == SharingState.TRANSFERRING ||
-            sharingState == SharingState.COMPLETED
-            
         // Pre-parse the bitmap so it can be used for the background of the completed state
         val bitmap = remember(currentArtworkB64) {
             currentArtworkB64?.let { b64 ->
@@ -330,7 +337,7 @@ fun ReceiveScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
+                    .background(Color.Transparent)
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
