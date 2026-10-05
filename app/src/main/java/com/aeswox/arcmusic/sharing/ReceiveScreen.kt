@@ -47,6 +47,8 @@ fun ReceiveScreen(
     val connectionRequest by viewModel.connectionRequest.collectAsState()
     val sharingState by viewModel.sharingState.collectAsState()
     val transferProgress by viewModel.transferProgress.collectAsState()
+    val totalTransferCount by viewModel.totalTransferCount.collectAsState()
+    val completedTransferCount by viewModel.completedTransferCount.collectAsState()
     val currentTitle by viewModel.currentTransferTitle.collectAsState()
     val currentArtworkB64 by viewModel.currentTransferArtworkB64.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -449,8 +451,14 @@ fun ReceiveScreen(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.padding(24.dp)
                                     ) {
+                                        val animatedProgress by animateFloatAsState(
+                                            targetValue = transferProgress,
+                                            animationSpec = tween(400, easing = LinearOutSlowInEasing),
+                                            label = "receive_progress"
+                                        )
+
                                         Box(
-                                            modifier = Modifier.size(120.dp),
+                                            modifier = Modifier.size(140.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             if (bitmap != null) {
@@ -461,7 +469,7 @@ fun ReceiveScreen(
                                                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
                                                 )
                                                 // Dark scrim for the percentage text
-                                                Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)))
+                                                Box(modifier = Modifier.size(120.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)))
                                             } else {
                                                 Box(
                                                     modifier = Modifier.size(120.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
@@ -472,29 +480,34 @@ fun ReceiveScreen(
                                             }
                                             
                                             androidx.compose.material3.CircularProgressIndicator(
-                                                progress = { transferProgress },
+                                                progress = { animatedProgress },
                                                 modifier = Modifier.fillMaxSize(),
                                                 strokeWidth = 6.dp,
                                                 color = MaterialTheme.colorScheme.primary,
-                                                trackColor = Color.Transparent,
+                                                trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                                                 strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                                             )
                                             
                                             Text(
-                                                "${(transferProgress * 100).toInt()}%",
+                                                "${(animatedProgress * 100).toInt()}%",
                                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                                 color = if (bitmap != null) Color.White else MaterialTheme.colorScheme.onSurface
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(24.dp))
+                                        val receivingText = if (totalTransferCount > 1) {
+                                            "Receiving ${completedTransferCount + 1} of $totalTransferCount..."
+                                        } else {
+                                            "Receiving..."
+                                        }
                                         Text(
-                                            "Receiving...",
+                                            receivingText,
                                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            currentTitle ?: "",
+                                            if (totalTransferCount > 1) "Multiple items" else (currentTitle ?: ""),
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                             color = MaterialTheme.colorScheme.onSurface,
                                             maxLines = 1,

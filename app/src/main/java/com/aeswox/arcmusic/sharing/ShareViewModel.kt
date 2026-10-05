@@ -63,6 +63,18 @@ class ShareViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0f
     )
+    
+    val totalTransferCount = nearbySharingManager.totalTransferCount.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+    
+    val completedTransferCount = nearbySharingManager.completedTransferCount.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
 
     val currentTransferTitle = nearbySharingManager.currentTransferTitle.stateIn(
         scope = viewModelScope,

@@ -57,6 +57,8 @@ fun ShareScreen(
     val discoveredEndpoints by viewModel.discoveredEndpoints.collectAsState()
     val connectionRequest by viewModel.connectionRequest.collectAsState()
     val transferProgress by viewModel.transferProgress.collectAsState()
+    val totalTransferCount by viewModel.totalTransferCount.collectAsState()
+    val completedTransferCount by viewModel.completedTransferCount.collectAsState()
     val context = LocalContext.current
 
     // Connection request dialog
@@ -169,6 +171,8 @@ fun ShareScreen(
                 sharingState = sharingState,
                 discoveredEndpoints = discoveredEndpoints,
                 transferProgress = transferProgress,
+                totalTransferCount = totalTransferCount,
+                completedTransferCount = completedTransferCount,
                 onEndpointClick = { viewModel.requestConnection(it) },
                 onCancelTransfer = { viewModel.cancelTransfer() },
                 onNfcTokenChanged = { token ->
@@ -256,6 +260,8 @@ private fun DeviceDiscoveryCard(
     sharingState: SharingState,
     discoveredEndpoints: List<DiscoveredEndpoint>,
     transferProgress: Float,
+    totalTransferCount: Int,
+    completedTransferCount: Int,
     onEndpointClick: (String) -> Unit,
     onCancelTransfer: () -> Unit,
     onNfcTokenChanged: (String?) -> Unit,
@@ -382,6 +388,8 @@ private fun DeviceDiscoveryCard(
                     // Show the connected device with progress arc
                     TransferringView(
                         progress = transferProgress,
+                        totalCount = totalTransferCount,
+                        completedCount = completedTransferCount,
                         onCancel = onCancelTransfer
                     )
                 } else if (discoveredEndpoints.isNotEmpty()) {
@@ -476,6 +484,8 @@ private fun DeviceDiscoveryCard(
 @Composable
 private fun TransferringView(
     progress: Float,
+    totalCount: Int,
+    completedCount: Int,
     onCancel: () -> Unit
 ) {
     Column(
@@ -484,8 +494,9 @@ private fun TransferringView(
         modifier = Modifier.fillMaxSize()
     ) {
         Spacer(modifier = Modifier.weight(1f))
+        val text = if (totalCount > 1) "Sending ${completedCount + 1} of $totalCount..." else "Sending…"
         DeviceAvatarButton(
-            endpoint = DiscoveredEndpoint(id = "", name = "Sending…"),
+            endpoint = DiscoveredEndpoint(id = "", name = text),
             progress = progress,
             isTransferring = true,
             onClick = {}

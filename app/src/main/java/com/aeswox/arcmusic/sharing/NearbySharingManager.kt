@@ -74,6 +74,12 @@ class NearbySharingManager @Inject constructor(
     private val _transferProgress = MutableStateFlow(0f)
     val transferProgress: StateFlow<Float> = _transferProgress.asStateFlow()
     
+    private val _totalTransferCount = MutableStateFlow(0)
+    val totalTransferCount: StateFlow<Int> = _totalTransferCount.asStateFlow()
+
+    private val _completedTransferCount = MutableStateFlow(0)
+    val completedTransferCount: StateFlow<Int> = _completedTransferCount.asStateFlow()
+    
     private val _currentTransferTitle = MutableStateFlow<String?>(null)
     val currentTransferTitle: StateFlow<String?> = _currentTransferTitle.asStateFlow()
     
@@ -129,6 +135,8 @@ class NearbySharingManager @Inject constructor(
         filePayloadIds.clear()
         _sharingState.value = SharingState.IDLE
         _transferProgress.value = 0f
+        _totalTransferCount.value = 0
+        _completedTransferCount.value = 0
         _currentTransferTitle.value = null
         _currentTransferArtworkB64.value = null
         _connectionRequest.value = null
@@ -152,16 +160,15 @@ class NearbySharingManager @Inject constructor(
     private fun processNextInQueue() {
         val endpointId = activeEndpointId ?: return
         if (payloadQueue.isEmpty()) {
-            // All tracks sent — disconnect so the sender can start fresh next time
+            // All tracks sent — switch to COMPLETED and disconnect
+            _sharingState.value = SharingState.COMPLETED
+            updateTransferService(SharingState.IDLE)
             connectionsClient.disconnectFromEndpoint(endpointId)
             activeEndpointId = null
             currentPayload = null
             totalFileCount = 0
             completedFileCount = 0
             filePayloadIds.clear()
-            _sharingState.value = SharingState.IDLE
-            _transferProgress.value = 0f
-            updateTransferService(SharingState.IDLE)
             return
         }
         val track = payloadQueue.removeAt(0)
@@ -200,6 +207,10 @@ class NearbySharingManager @Inject constructor(
                     if (json.has("payloadId")) {
                         expectedMetadata[json.getLong("payloadId")] = json
                         val type = json.optString("type")
+                        if (json.has("totalCount")) {
+                            totalFileCount = json.getInt("totalCount")
+                            _totalTransferCount.value = totalFileCount
+                        }
                         if (type == "track") {
                             _currentTransferTitle.value = json.optString("title")
                             if (json.has("thumbnailB64")) {
@@ -211,6 +222,7 @@ class NearbySharingManager @Inject constructor(
                     e.printStackTrace()
                 }
             } else if (payload.type == Payload.Type.FILE) {
+                filePayloadIds.add(payload.id)
                 payload.asFile()?.asUri()?.let { uri ->
                     incomingUris[payload.id] = uri
                 } ?: payload.asFile()?.asJavaFile()?.let { file ->
@@ -234,6 +246,7 @@ class NearbySharingManager @Inject constructor(
                 if (update.payloadId in filePayloadIds) {
                     filePayloadIds.remove(update.payloadId)
                     completedFileCount++
+                    _completedTransferCount.value = completedFileCount
                     if (totalFileCount > 0) {
                         val unified = completedFileCount.toFloat() / totalFileCount
                         _transferProgress.value = unified
@@ -341,9 +354,11 @@ class NearbySharingManager @Inject constructor(
         }
 
         override fun onDisconnected(endpointId: String) {
-            _sharingState.value = SharingState.IDLE
-            _transferProgress.value = 0f
-            updateTransferService(SharingState.IDLE)
+            if (_sharingState.value != SharingState.COMPLETED) {
+                _sharingState.value = SharingState.IDLE
+                _transferProgress.value = 0f
+                updateTransferService(SharingState.IDLE)
+            }
         }
     }
 
@@ -420,6 +435,8 @@ class NearbySharingManager @Inject constructor(
                 // Initialise unified progress counters now that we know the full batch size
                 totalFileCount = payloadQueue.size
                 completedFileCount = 0
+                _totalTransferCount.value = totalFileCount
+                _completedTransferCount.value = completedFileCount
                 filePayloadIds.clear()
 
                 if (activePayloads.isEmpty() && payloadQueue.isNotEmpty()) {
@@ -460,6 +477,7 @@ class NearbySharingManager @Inject constructor(
                 put("title", track.title)
                 put("ext", file.extension)
                 put("filename", file.name)
+                put("totalCount", totalFileCount)
                 if (thumbnailB64 != null) {
                     put("thumbnailB64", thumbnailB64)
                 }
