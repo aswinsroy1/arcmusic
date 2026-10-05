@@ -463,10 +463,22 @@ class NearbySharingManager @Inject constructor(
                 val picture = mmr.embeddedPicture
                 if (picture != null) {
                     val bmp = android.graphics.BitmapFactory.decodeByteArray(picture, 0, picture.size)
-                    val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 128, 128, true)
+                    // Scale to a higher resolution (400x400) for crispness on completion cards
+                    val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 400, 400, true)
                     val out = java.io.ByteArrayOutputStream()
-                    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, out)
-                    thumbnailB64 = android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+                    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 65, out)
+                    val bytes = out.toByteArray()
+                    if (bytes.size < 24000) {
+                        // Base64 overhead is ~33%. 24KB bytes -> ~32KB string.
+                        // Nearby connections MAX_BYTES_DATA_SIZE limit is 32768.
+                        thumbnailB64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    } else {
+                        // Fallback to a smaller size if compression wasn't enough to fit the limit
+                        out.reset()
+                        val smaller = android.graphics.Bitmap.createScaledBitmap(bmp, 200, 200, true)
+                        smaller.compress(android.graphics.Bitmap.CompressFormat.JPEG, 50, out)
+                        thumbnailB64 = android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+                    }
                 }
                 mmr.release()
             } catch (e: Exception) {
