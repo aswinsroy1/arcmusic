@@ -273,17 +273,19 @@ class NearbySharingManager @Inject constructor(
                 if (activePayloads.isEmpty()) {
                     if (payloadQueue.isNotEmpty()) {
                         processNextInQueue()
+                    } else if (totalFileCount > 0 && completedFileCount < totalFileCount) {
+                        // Receiver side: batch is incomplete, wait for the next payload
                     } else {
-                        // Receiver side: all payloads processed — finalize and reset connection
-                        activeEndpointId?.let { connectionsClient.disconnectFromEndpoint(it) }
-                        activeEndpointId = null
-                        _sharingState.value = SharingState.COMPLETED
-                        updateTransferService(SharingState.IDLE)
-                        
+                        // All payloads processed — finalize and reset connection
                         coroutineScope.launch {
                             kotlinx.coroutines.joinAll(*processingJobs.toTypedArray())
                             processingJobs.clear()
                             importMediaUseCase.finalizeImport()
+                            
+                            activeEndpointId?.let { connectionsClient.disconnectFromEndpoint(it) }
+                            activeEndpointId = null
+                            _sharingState.value = SharingState.COMPLETED
+                            updateTransferService(SharingState.IDLE)
                         }
                     }
                 }
