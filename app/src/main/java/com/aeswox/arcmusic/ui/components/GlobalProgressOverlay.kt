@@ -36,6 +36,7 @@ class GlobalOverlayViewModel @Inject constructor(
 @Composable
 fun GlobalProgressOverlay(
     modifier: Modifier = Modifier,
+    currentRoute: String? = null,
     viewModel: GlobalOverlayViewModel = hiltViewModel()
 ) {
     val scanProgress by viewModel.scanProgress.collectAsState()
@@ -47,12 +48,35 @@ fun GlobalProgressOverlay(
     val isScanning = scanProgress.isRunning
     val isTransferring = sharingState == SharingState.TRANSFERRING
 
-    val shouldShow = isScanning || isTransferring
+    // Do not show on pages where local progress is already visible
+    val isExcludedRoute = currentRoute == "media_management" || 
+                          currentRoute == "receive" || 
+                          currentRoute?.startsWith("share") == true
+                          
+    val shouldShow = (isScanning || isTransferring) && !isExcludedRoute
 
     AnimatedVisibility(
         visible = shouldShow,
-        enter = slideInVertically(initialOffsetY = { -it * 2 }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { -it * 2 }) + fadeOut(),
+        enter = slideInVertically(
+            initialOffsetY = { -it - 100 },
+            animationSpec = androidx.compose.animation.core.spring(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+            )
+        ) + fadeIn(animationSpec = androidx.compose.animation.core.tween(300)) + scaleIn(
+            initialScale = 0.8f,
+            animationSpec = androidx.compose.animation.core.spring(
+                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+            )
+        ),
+        exit = slideOutVertically(
+            targetOffsetY = { -it - 100 },
+            animationSpec = androidx.compose.animation.core.tween(250)
+        ) + fadeOut(animationSpec = androidx.compose.animation.core.tween(250)) + scaleOut(
+            targetScale = 0.8f,
+            animationSpec = androidx.compose.animation.core.tween(250)
+        ),
         modifier = modifier
             .fillMaxWidth()
             .padding(top = 48.dp) // Below status bar
