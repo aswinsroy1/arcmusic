@@ -234,6 +234,11 @@ class MusicViewModel @Inject constructor(
     val randomPicks: StateFlow<List<Track>>
     val recentlyPlayed: StateFlow<List<Track>>
     val homescreenRecommendations: StateFlow<List<GrowthCard>>
+
+    // ── Autoplay state (class-level so skipToNext() can access resolveAutoplay) ──
+    private var isResolvingAutoplay = false
+    private val recentAutoplayArtists = mutableListOf<String>()
+    private val MAX_AUTOPLAY_QUEUE_SIZE = 40
     
     val heroCardPlayingStateEnabled: StateFlow<Boolean> = settingsRepository.heroCardPlayingStateEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -936,7 +941,110 @@ class MusicViewModel @Inject constructor(
     }
 
     fun skipToNext() {
-        musicPlayerConnection.skipToNext()
+        val currentIndex = musicPlayerConnection.currentMediaItemIndex.value
+        val queueSize = musicPlayerConnection.getMediaItemCount()
+        // If we're at the end of the queue and autoplay is on, pick a track first then advance
+        if (currentIndex >= 0 && currentIndex == queueSize - 1 &&
+            autoplayEnabled.value &&
+            musicPlayerConnection.repeatMode.value != androidx.media3.common.Player.REPEAT_MODE_ALL
+        ) {
+            viewModelScope.launch {
+                resolveAutoplay(skipAfterAppend = true)
+            }
+        } else {
+            musicPlayerConnection.skipToNext()
+        }
+    }
+
+    /**
+     * Picks the next autoplay candidate, appends it to the queue, and (when
+     * [skipAfterAppend] is true) explicitly seeks to it and resumes playback.
+     *
+     * [skipAfterAppend] must be true whenever ExoPlayer is already in STATE_ENDED
+     * or the user pressed Next at the very end of the queue, because ExoPlayer will
+     * NOT auto-advance to a newly-appended item in those states.
+     */
+    private suspend fun resolveAutoplay(skipAfterAppend: Boolean = false) {
+        if (isResolvingAutoplay) return
+        isResolvingAutoplay = true
+
+        val currentQueueSize = musicPlayerConnection.getMediaItemCount()
+
+        // Maintain max queue size (Sliding Window)
+        if (currentQueueSize >= MAX_AUTOPLAY_QUEUE_SIZE) {
+            musicPlayerConnection.removeQueueItem(0)
+        }
+
+        val alreadyInQueue = musicPlayerConnection.currentQueue.value
+            .map { it.mediaId }
+            .toSet()
+
+        val currentTrack = _currentlyPlaying.value
+        val currentGenre = currentTrack?.genre?.takeIf { it.isNotBlank() && it != "Unknown" }
+        val currentArtist = currentTrack?.artist?.takeIf { it.isNotBlank() && it != "Unknown" }
+
+        val tracks = runCatching { repository.getAllTracks().first() }.getOrNull() ?: emptyList()
+        val validTracks = tracks.filter { it.id !in alreadyInQueue && it.filePath.isNotEmpty() }
+
+        var candidate: Track? = null
+
+        // Tier 1: Same Genre, Different Artist (not recently played)
+        if (currentGenre != null) {
+            val tier1 = validTracks.filter {
+                it.genre == currentGenre &&
+                it.artist != currentArtist &&
+                !recentAutoplayArtists.contains(it.artist)
+            }
+            candidate = tier1.randomOrNull()
+        }
+
+        // Tier 2: Different Artist (not recently played)
+        if (candidate == null) {
+            val tier2 = validTracks.filter {
+                it.artist != currentArtist &&
+                !recentAutoplayArtists.contains(it.artist)
+            }
+            candidate = tier2.randomOrNull()
+        }
+
+        // Tier 3: Random Track
+        if (candidate == null) {
+            candidate = validTracks.randomOrNull()
+        }
+
+        if (candidate != null) {
+            val candidateArtist = candidate.artist ?: "Unknown"
+            recentAutoplayArtists.add(candidateArtist)
+            if (recentAutoplayArtists.size > 5) {
+                recentAutoplayArtists.removeAt(0)
+            }
+
+            val mediaItem = androidx.media3.common.MediaItem.Builder()
+                .setUri(android.net.Uri.fromFile(java.io.File(candidate.filePath)))
+                .setMediaId(candidate.id)
+                .setMediaMetadata(
+                    androidx.media3.common.MediaMetadata.Builder()
+                        .setTitle(candidate.title)
+                        .setArtist(candidate.artist)
+                        .setArtworkUri(candidate.artworkUri?.let { android.net.Uri.parse(it) })
+                        .setExtras(android.os.Bundle().apply {
+                            putLong("durationMs", candidate.durationMs)
+                        })
+                        .build()
+                )
+                .build()
+            musicPlayerConnection.appendToQueue(mediaItem)
+
+            if (skipAfterAppend) {
+                // Give ExoPlayer a moment to register the new item before seeking
+                kotlinx.coroutines.delay(200)
+                musicPlayerConnection.skipToNext()
+                musicPlayerConnection.play()
+            }
+        }
+
+        kotlinx.coroutines.delay(500)
+        isResolvingAutoplay = false
     }
 
     fun skipToPrevious() {
@@ -1726,97 +1834,35 @@ class MusicViewModel @Inject constructor(
         }
 
         // ── Autoplay: Queue Manager Logic ────────────────
-        var isResolvingAutoplay = false
-        val recentAutoplayArtists = mutableListOf<String>()
-        val MAX_QUEUE_SIZE = 40
 
+        // ── Listener 1: Pre-load next autoplay track while last song is still playing ──
+        // Fires when index changes to the last item so we queue the next song in advance.
+        // ExoPlayer will auto-advance naturally once the current track finishes.
         viewModelScope.launch {
             musicPlayerConnection.currentMediaItemIndex.collect { currentIndex ->
                 val currentQueueSize = musicPlayerConnection.getMediaItemCount()
                 if (currentQueueSize == 0) return@collect
-                
-                // Trigger when we are on the last item in the queue
-                if (currentIndex == currentQueueSize - 1 && 
-                    autoplayEnabled.value && 
-                    !isResolvingAutoplay &&
+
+                if (currentIndex == currentQueueSize - 1 &&
+                    autoplayEnabled.value &&
                     musicPlayerConnection.repeatMode.value != androidx.media3.common.Player.REPEAT_MODE_ALL
                 ) {
-                    isResolvingAutoplay = true
-                    
-                    // Maintain max queue size (Sliding Window)
-                    if (currentQueueSize >= MAX_QUEUE_SIZE) {
-                        musicPlayerConnection.removeQueueItem(0)
-                    }
+                    resolveAutoplay(skipAfterAppend = false)
+                }
+            }
+        }
 
-                    // Vibe Matching logic
-                    val alreadyInQueue = musicPlayerConnection.currentQueue.value
-                        .map { it.mediaId }
-                        .toSet()
-                        
-                    val currentTrack = _currentlyPlaying.value
-                    val currentGenre = currentTrack?.genre?.takeIf { it.isNotBlank() && it != "Unknown" }
-                    val currentArtist = currentTrack?.artist?.takeIf { it.isNotBlank() && it != "Unknown" }
-                    
-                    // Get all tracks safely
-                    val tracks = runCatching { repository.getAllTracks().first() }.getOrNull() ?: emptyList()
-                    
-                    // Filter out already in queue and bad files
-                    val validTracks = tracks.filter { it.id !in alreadyInQueue && it.filePath.isNotEmpty() }
-                    
-                    var candidate: Track? = null
-                    
-                    // Tier 1: Same Genre, Different Artist (not recently played)
-                    if (currentGenre != null) {
-                        val tier1 = validTracks.filter { 
-                            it.genre == currentGenre && 
-                            it.artist != currentArtist &&
-                            !recentAutoplayArtists.contains(it.artist)
-                        }
-                        candidate = tier1.randomOrNull()
-                    }
-                    
-                    // Tier 2: Different Artist (not recently played)
-                    if (candidate == null) {
-                        val tier2 = validTracks.filter { 
-                            it.artist != currentArtist &&
-                            !recentAutoplayArtists.contains(it.artist)
-                        }
-                        candidate = tier2.randomOrNull()
-                    }
-                    
-                    // Tier 3: Random Track
-                    if (candidate == null) {
-                        candidate = validTracks.randomOrNull()
-                    }
-                    
-                    if (candidate != null) {
-                        // Keep track of recent artists for cooldown
-                        val candidateArtist = candidate.artist ?: "Unknown"
-                        recentAutoplayArtists.add(candidateArtist)
-                        if (recentAutoplayArtists.size > 5) {
-                            recentAutoplayArtists.removeAt(0)
-                        }
-                        
-                        val mediaItem = androidx.media3.common.MediaItem.Builder()
-                            .setUri(android.net.Uri.fromFile(java.io.File(candidate.filePath)))
-                            .setMediaId(candidate.id)
-                            .setMediaMetadata(
-                                androidx.media3.common.MediaMetadata.Builder()
-                                    .setTitle(candidate.title)
-                                    .setArtist(candidate.artist)
-                                    .setArtworkUri(candidate.artworkUri?.let { android.net.Uri.parse(it) })
-                                    .setExtras(android.os.Bundle().apply {
-                                        putLong("durationMs", candidate.durationMs)
-                                    })
-                                    .build()
-                            )
-                            .build()
-                        musicPlayerConnection.appendToQueue(mediaItem)
-                    }
-                    
-                    // Unlock after a tiny delay to ensure ExoPlayer processes the queue update
-                    kotlinx.coroutines.delay(500)
-                    isResolvingAutoplay = false
+        // ── Listener 2: Advance when queue is fully exhausted (STATE_ENDED) ────────────
+        // When the last song ends naturally, ExoPlayer sits in STATE_ENDED and never
+        // changes the media item index, so Listener 1 never re-fires. We catch that here
+        // and explicitly seek to the newly-appended autoplay track.
+        viewModelScope.launch {
+            musicPlayerConnection.playbackState.collect { state ->
+                if (state == com.aeswox.arcmusic.playback.PlaybackState.ENDED &&
+                    autoplayEnabled.value &&
+                    musicPlayerConnection.repeatMode.value != androidx.media3.common.Player.REPEAT_MODE_ALL
+                ) {
+                    resolveAutoplay(skipAfterAppend = true)
                 }
             }
         }

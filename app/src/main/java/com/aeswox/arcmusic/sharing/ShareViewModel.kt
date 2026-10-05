@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
 import androidx.lifecycle.SavedStateHandle
@@ -18,6 +19,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+data class SharePayloadDisplayInfo(
+    val title: String,
+    val subtitle: String,
+    val imagePath: String? = null,
+    val isMultiple: Boolean = false
+)
+
 @HiltViewModel
 class ShareViewModel @Inject constructor(
     private val nearbySharingManager: NearbySharingManager,
@@ -26,6 +34,11 @@ class ShareViewModel @Inject constructor(
 ) : ViewModel() {
 
     private var currentPayload: SharePayload? = null
+
+    private val _payloadDisplayLabel = kotlinx.coroutines.flow.MutableStateFlow(
+        SharePayloadDisplayInfo("Preparing to send", "Gathering items...")
+    )
+    val payloadDisplayLabel = _payloadDisplayLabel.asStateFlow()
 
     val sharingState = nearbySharingManager.sharingState.stateIn(
         scope = viewModelScope,
@@ -51,7 +64,32 @@ class ShareViewModel @Inject constructor(
         initialValue = 0f
     )
 
+    val currentTransferTitle = nearbySharingManager.currentTransferTitle.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    val currentTransferArtworkB64 = nearbySharingManager.currentTransferArtworkB64.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    var userName: String
+        get() = nearbySharingManager.userName
+        set(value) {
+            nearbySharingManager.userName = value
+        }
+
+    fun reset() {
+        nearbySharingManager.reset()
+    }
+
     init {
+        // Always reset so a previous live connection doesn't block the new session
+        nearbySharingManager.reset()
+
         val payloadType = savedStateHandle.get<String>("type")
         val payloadId = savedStateHandle.get<String>("id")
         
@@ -65,6 +103,66 @@ class ShareViewModel @Inject constructor(
                 else -> null
             }
             currentPayload?.let { nearbySharingManager.setPayload(it) }
+
+            viewModelScope.launch(Dispatchers.IO) {
+                val label = when (payloadType) {
+                    "track" -> {
+                        val track = repository.getTrackById(payloadId)
+                        val imageUri = track?.artworkUri ?: track?.albumId?.let { "content://media/external/audio/albumart/$it" }
+                        SharePayloadDisplayInfo(
+                            title = track?.title ?: "Unknown Track",
+                            subtitle = track?.artist ?: "1 audio file",
+                            imagePath = imageUri
+                        )
+                    }
+                    "tracks" -> {
+                        val ids = payloadId.split(",")
+                        val count = ids.size
+                        if (count == 1) {
+                            val track = repository.getTrackById(ids.first())
+                            val imageUri = track?.artworkUri ?: track?.albumId?.let { "content://media/external/audio/albumart/$it" }
+                            SharePayloadDisplayInfo(
+                                title = track?.title ?: "Unknown Track",
+                                subtitle = track?.artist ?: "1 audio file",
+                                imagePath = imageUri
+                            )
+                        } else {
+                            SharePayloadDisplayInfo(
+                                title = "Multiple Tracks",
+                                subtitle = "$count audio files",
+                                isMultiple = true
+                            )
+                        }
+                    }
+                    "playlist" -> {
+                        SharePayloadDisplayInfo(payloadId, "Playlist", isMultiple = true)
+                    }
+                    "artist" -> {
+                        val artist = repository.getArtistById(payloadId).first()
+                        val track = repository.getTracksByArtist(payloadId).first().firstOrNull()
+                        val imageUri = track?.artworkUri ?: track?.albumId?.let { "content://media/external/audio/albumart/$it" }
+                        SharePayloadDisplayInfo(
+                            title = artist?.name ?: "Unknown Artist",
+                            subtitle = "Artist",
+                            imagePath = imageUri,
+                            isMultiple = true
+                        )
+                    }
+                    "album" -> {
+                        val album = repository.getAlbumById(payloadId).first()
+                        val track = repository.getTracksByAlbum(payloadId).first().firstOrNull()
+                        val imageUri = track?.artworkUri ?: track?.albumId?.let { "content://media/external/audio/albumart/$it" }
+                        SharePayloadDisplayInfo(
+                            title = album?.title ?: "Unknown Album",
+                            subtitle = "Album",
+                            imagePath = imageUri,
+                            isMultiple = true
+                        )
+                    }
+                    else -> SharePayloadDisplayInfo("Unknown Item", "")
+                }
+                _payloadDisplayLabel.value = label
+            }
         }
     }
 
@@ -76,8 +174,8 @@ class ShareViewModel @Inject constructor(
         nearbySharingManager.stopDiscovery()
     }
 
-    fun startAdvertising() {
-        nearbySharingManager.startAdvertising()
+    fun startAdvertising(nfcToken: String? = null) {
+        nearbySharingManager.startAdvertising(nfcToken)
     }
 
     fun stopAdvertising() {
@@ -86,6 +184,10 @@ class ShareViewModel @Inject constructor(
 
     fun requestConnection(endpointId: String) {
         nearbySharingManager.requestConnection(endpointId)
+    }
+    
+    fun connectViaNfcToken(token: String) {
+        nearbySharingManager.connectViaNfcToken(token)
     }
 
     fun acceptConnection(endpointId: String) {

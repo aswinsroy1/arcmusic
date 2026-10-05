@@ -42,6 +42,7 @@ enum class SharingState {
     DISCOVERING,
     CONNECTED,
     TRANSFERRING,
+    COMPLETED,
     ERROR
 }
 
@@ -57,7 +58,13 @@ class NearbySharingManager @Inject constructor(
     private val connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
     private val strategy = Strategy.P2P_POINT_TO_POINT
     private val serviceId = "com.aeswox.arcmusic.SERVICE_ID"
-    private val userName = android.os.Build.MODEL // Use device name
+    private val prefs = context.getSharedPreferences("nearby_sharing_prefs", Context.MODE_PRIVATE)
+
+    var userName: String
+        get() = prefs.getString("device_name", android.os.Build.MODEL) ?: android.os.Build.MODEL
+        set(value) {
+            prefs.edit().putString("device_name", value).apply()
+        }
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     private val processingJobs = mutableListOf<kotlinx.coroutines.Job>()
 
@@ -66,6 +73,12 @@ class NearbySharingManager @Inject constructor(
 
     private val _transferProgress = MutableStateFlow(0f)
     val transferProgress: StateFlow<Float> = _transferProgress.asStateFlow()
+    
+    private val _currentTransferTitle = MutableStateFlow<String?>(null)
+    val currentTransferTitle: StateFlow<String?> = _currentTransferTitle.asStateFlow()
+    
+    private val _currentTransferArtworkB64 = MutableStateFlow<String?>(null)
+    val currentTransferArtworkB64: StateFlow<String?> = _currentTransferArtworkB64.asStateFlow()
 
     private val _discoveredEndpoints = MutableStateFlow<List<DiscoveredEndpoint>>(emptyList())
     val discoveredEndpoints: StateFlow<List<DiscoveredEndpoint>> = _discoveredEndpoints.asStateFlow()
@@ -81,16 +94,71 @@ class NearbySharingManager @Inject constructor(
     // Store sent payloads to track when to delete temp zips
     private val sentFiles = mutableMapOf<Long, File>()
 
+    @Volatile
+    private var expectedNfcToken: String? = null
+    
+    private val discoveredNfcTokens = java.util.concurrent.ConcurrentHashMap<String, String>()
+    
+    fun connectViaNfcToken(token: String) {
+        expectedNfcToken = token
+        
+        // Check if we already discovered it before the tap happened
+        val match = discoveredNfcTokens.entries.find { it.value == token }
+        if (match != null) {
+            requestConnection(match.key)
+        }
+    }
+
     fun setPayload(payload: SharePayload) {
         currentPayload = payload
     }
 
+    /** Call before opening ShareScreen to ensure a clean state for a new session. */
+    fun reset() {
+        activeEndpointId?.let { connectionsClient.disconnectFromEndpoint(it) }
+        activeEndpointId = null
+        currentPayload = null
+        payloadQueue.clear()
+        activePayloads.clear()
+        sentFiles.clear()
+        expectedMetadata.clear()
+        incomingFiles.clear()
+        incomingUris.clear()
+        totalFileCount = 0
+        completedFileCount = 0
+        filePayloadIds.clear()
+        _sharingState.value = SharingState.IDLE
+        _transferProgress.value = 0f
+        _currentTransferTitle.value = null
+        _currentTransferArtworkB64.value = null
+        _connectionRequest.value = null
+        _discoveredEndpoints.value = emptyList()
+        expectedNfcToken = null
+        discoveredNfcTokens.clear()
+        updateTransferService(SharingState.IDLE)
+        stopAdvertising()
+        stopDiscovery()
+    }
+
     private val payloadQueue = mutableListOf<com.aeswox.arcmusic.db.entities.Track>()
+    @Volatile
     private var activeEndpointId: String? = null
+
+    // Unified progress tracking across all files in a batch
+    private var totalFileCount = 0
+    private var completedFileCount = 0
+    private val filePayloadIds = mutableSetOf<Long>() // only actual file payloads, not metadata bytes
 
     private fun processNextInQueue() {
         val endpointId = activeEndpointId ?: return
         if (payloadQueue.isEmpty()) {
+            // All tracks sent — disconnect so the sender can start fresh next time
+            connectionsClient.disconnectFromEndpoint(endpointId)
+            activeEndpointId = null
+            currentPayload = null
+            totalFileCount = 0
+            completedFileCount = 0
+            filePayloadIds.clear()
             _sharingState.value = SharingState.IDLE
             _transferProgress.value = 0f
             updateTransferService(SharingState.IDLE)
@@ -127,9 +195,20 @@ class NearbySharingManager @Inject constructor(
             
             if (payload.type == Payload.Type.BYTES) {
                 val jsonStr = String(payload.asBytes()!!, Charsets.UTF_8)
-                val json = JSONObject(jsonStr)
-                if (json.has("payloadId")) {
-                    expectedMetadata[json.getLong("payloadId")] = json
+                try {
+                    val json = JSONObject(jsonStr)
+                    if (json.has("payloadId")) {
+                        expectedMetadata[json.getLong("payloadId")] = json
+                        val type = json.optString("type")
+                        if (type == "track") {
+                            _currentTransferTitle.value = json.optString("title")
+                            if (json.has("thumbnailB64")) {
+                                _currentTransferArtworkB64.value = json.optString("thumbnailB64")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             } else if (payload.type == Payload.Type.FILE) {
                 payload.asFile()?.asUri()?.let { uri ->
@@ -143,13 +222,24 @@ class NearbySharingManager @Inject constructor(
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
             if (update.status == PayloadTransferUpdate.Status.IN_PROGRESS) {
                 _sharingState.value = SharingState.TRANSFERRING
-                if (update.totalBytes > 0) {
-                    val progress = update.bytesTransferred.toFloat() / update.totalBytes.toFloat()
-                    _transferProgress.value = progress
-                    updateTransferService(SharingState.TRANSFERRING, progress)
+                // Only update progress for actual file payloads (not tiny metadata bytes-payloads)
+                if (update.payloadId in filePayloadIds && update.totalBytes > 0 && totalFileCount > 0) {
+                    val fileProgress = update.bytesTransferred.toFloat() / update.totalBytes.toFloat()
+                    val unified = (completedFileCount + fileProgress) / totalFileCount
+                    _transferProgress.value = unified
+                    updateTransferService(SharingState.TRANSFERRING, unified)
                 }
             } else if (update.status == PayloadTransferUpdate.Status.SUCCESS) {
                 activePayloads.remove(update.payloadId)
+                if (update.payloadId in filePayloadIds) {
+                    filePayloadIds.remove(update.payloadId)
+                    completedFileCount++
+                    if (totalFileCount > 0) {
+                        val unified = completedFileCount.toFloat() / totalFileCount
+                        _transferProgress.value = unified
+                        updateTransferService(SharingState.TRANSFERRING, unified)
+                    }
+                }
                 
                 val receivedUri = incomingUris[update.payloadId]
                 val receivedFile = incomingFiles[update.payloadId]
@@ -171,8 +261,10 @@ class NearbySharingManager @Inject constructor(
                     if (payloadQueue.isNotEmpty()) {
                         processNextInQueue()
                     } else {
-                        _sharingState.value = SharingState.IDLE
-                        _transferProgress.value = 0f
+                        // Receiver side: all payloads processed — finalize and reset connection
+                        activeEndpointId?.let { connectionsClient.disconnectFromEndpoint(it) }
+                        activeEndpointId = null
+                        _sharingState.value = SharingState.COMPLETED
                         updateTransferService(SharingState.IDLE)
                         
                         coroutineScope.launch {
@@ -219,7 +311,16 @@ class NearbySharingManager @Inject constructor(
             if (isInitiator) {
                 acceptConnection(endpointId)
             } else {
-                _connectionRequest.value = ConnectionRequest(endpointId, info.endpointName, info.authenticationToken)
+                // Sender side logic: Check if the receiver passed back our exact token in their name
+                val receiverToken = if (info.endpointName.contains("|")) info.endpointName.split("|").getOrNull(1) else null
+                val currentToken = com.aeswox.arcmusic.sharing.NfcShareService.currentToken
+                
+                if (receiverToken != null && currentToken != null && receiverToken == currentToken) {
+                    acceptConnection(endpointId) // Seamless tap-to-share!
+                } else {
+                    val cleanName = if (info.endpointName.contains("|")) info.endpointName.substringBefore("|") else info.endpointName
+                    _connectionRequest.value = ConnectionRequest(endpointId, cleanName, info.authenticationToken)
+                }
             }
         }
 
@@ -316,6 +417,11 @@ class NearbySharingManager @Inject constructor(
                     }
                 }
                 
+                // Initialise unified progress counters now that we know the full batch size
+                totalFileCount = payloadQueue.size
+                completedFileCount = 0
+                filePayloadIds.clear()
+
                 if (activePayloads.isEmpty() && payloadQueue.isNotEmpty()) {
                     processNextInQueue()
                 }
@@ -329,12 +435,34 @@ class NearbySharingManager @Inject constructor(
         val file = File(track.filePath)
         if (file.exists()) {
             val filePayload = Payload.fromFile(file)
+            filePayloadIds.add(filePayload.id) // register so progress is tracked as a file payload
+            
+            var thumbnailB64: String? = null
+            try {
+                val mmr = android.media.MediaMetadataRetriever()
+                mmr.setDataSource(file.absolutePath)
+                val picture = mmr.embeddedPicture
+                if (picture != null) {
+                    val bmp = android.graphics.BitmapFactory.decodeByteArray(picture, 0, picture.size)
+                    val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 128, 128, true)
+                    val out = java.io.ByteArrayOutputStream()
+                    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, out)
+                    thumbnailB64 = android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+                }
+                mmr.release()
+            } catch (e: Exception) {
+                // Ignore extraction failures
+            }
+            
             val metadata = JSONObject().apply {
                 put("payloadId", filePayload.id)
                 put("type", "track")
                 put("title", track.title)
                 put("ext", file.extension)
                 put("filename", file.name)
+                if (thumbnailB64 != null) {
+                    put("thumbnailB64", thumbnailB64)
+                }
             }
             val metadataPayload = Payload.fromBytes(metadata.toString().toByteArray(Charsets.UTF_8))
             activePayloads.add(metadataPayload.id)
@@ -349,22 +477,41 @@ class NearbySharingManager @Inject constructor(
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             val currentList = _discoveredEndpoints.value.toMutableList()
-            currentList.add(DiscoveredEndpoint(endpointId, info.endpointName))
+            var displayName = info.endpointName
+            var token: String? = null
+            if (displayName.contains("|")) {
+                val parts = displayName.split("|")
+                displayName = parts[0]
+                token = parts.getOrNull(1)
+            }
+            
+            if (token != null) {
+                discoveredNfcTokens[endpointId] = token
+            }
+            
+            currentList.add(DiscoveredEndpoint(endpointId, displayName))
             _discoveredEndpoints.value = currentList
+            
+            // Auto connect if this endpoint matches our scanned NFC token
+            if (token != null && token == expectedNfcToken) {
+                requestConnection(endpointId)
+            }
         }
 
         override fun onEndpointLost(endpointId: String) {
+            discoveredNfcTokens.remove(endpointId)
             val currentList = _discoveredEndpoints.value.toMutableList()
             currentList.removeAll { it.id == endpointId }
             _discoveredEndpoints.value = currentList
         }
     }
 
-    fun startAdvertising() {
+    fun startAdvertising(nfcToken: String? = null) {
         isInitiator = false
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
+        val nameToAdvertise = if (nfcToken != null) "$userName|$nfcToken" else userName
         connectionsClient.startAdvertising(
-            userName, serviceId, connectionLifecycleCallback, advertisingOptions
+            nameToAdvertise, serviceId, connectionLifecycleCallback, advertisingOptions
         ).addOnSuccessListener {
             _sharingState.value = SharingState.ADVERTISING
         }.addOnFailureListener {
@@ -402,11 +549,14 @@ class NearbySharingManager @Inject constructor(
 
     fun requestConnection(endpointId: String) {
         isInitiator = true
-        connectionsClient.requestConnection(userName, endpointId, connectionLifecycleCallback)
+        // If we are connecting via an NFC token, send it back in our name so the sender can auto-accept
+        val nameToSend = if (expectedNfcToken != null) "$userName|$expectedNfcToken" else userName
+        connectionsClient.requestConnection(nameToSend, endpointId, connectionLifecycleCallback)
             .addOnFailureListener {
                 _sharingState.value = SharingState.ERROR
                 Log.e("NearbySharingManager", "Failed to request connection", it)
             }
+        expectedNfcToken = null
     }
 
     fun acceptConnection(endpointId: String) {
@@ -434,8 +584,14 @@ class NearbySharingManager @Inject constructor(
         for (id in payloadIds) {
             connectionsClient.cancelPayload(id)
         }
+        activeEndpointId?.let { connectionsClient.disconnectFromEndpoint(it) }
+        activeEndpointId = null
+        
         _sharingState.value = SharingState.IDLE
         _transferProgress.value = 0f
+        _currentTransferTitle.value = null
         updateTransferService(SharingState.IDLE)
     }
+
+
 }
