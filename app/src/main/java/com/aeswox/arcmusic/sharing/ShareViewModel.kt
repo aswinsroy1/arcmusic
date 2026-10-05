@@ -99,8 +99,12 @@ class ShareViewModel @Inject constructor(
     }
 
     init {
-        // Always reset so a previous live connection doesn't block the new session
-        nearbySharingManager.reset()
+        // Only reset if we do not have an active session running
+        val state = nearbySharingManager.sharingState.value
+        if (state != com.aeswox.arcmusic.sharing.SharingState.TRANSFERRING && 
+            state != com.aeswox.arcmusic.sharing.SharingState.CONNECTED) {
+            nearbySharingManager.reset()
+        }
 
         val payloadType = savedStateHandle.get<String>("type")
         val payloadId = savedStateHandle.get<String>("id")
