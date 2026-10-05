@@ -140,12 +140,8 @@ class NearbySharingManager @Inject constructor(
         _currentTransferTitle.value = null
         _currentTransferArtworkB64.value = null
         _connectionRequest.value = null
-        _discoveredEndpoints.value = emptyList()
         expectedNfcToken = null
-        discoveredNfcTokens.clear()
         updateTransferService(SharingState.IDLE)
-        stopAdvertising()
-        stopDiscovery()
     }
 
     private val payloadQueue = mutableListOf<com.aeswox.arcmusic.db.entities.Track>()
@@ -561,6 +557,7 @@ class NearbySharingManager @Inject constructor(
 
     fun startDiscovery() {
         _discoveredEndpoints.value = emptyList()
+        discoveredNfcTokens.clear()
         val discoveryOptions = DiscoveryOptions.Builder().setStrategy(strategy).build()
         connectionsClient.startDiscovery(
             serviceId, endpointDiscoveryCallback, discoveryOptions
