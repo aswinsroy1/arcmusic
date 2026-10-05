@@ -111,9 +111,17 @@ fun ListeningStatsScreenContent(
                 )
             }
         }
-        // Listening Personality: shows unlocked card if >= 5 hours (300 mins), otherwise shows progress teaser
+        // Listening Personality: dynamic unlock threshold based on time range
         item {
-            if (stats.totalMinutes >= PERSONALITY_UNLOCK_MINUTES) {
+            val unlockThreshold = when (stats.timeRange) {
+                TimeRange.DAILY -> 10L
+                TimeRange.WEEKLY -> 120L // 2 hours
+                TimeRange.MONTHLY -> 300L // 5 hours
+                TimeRange.YEARLY -> 600L // 10 hours
+                TimeRange.ALL_TIME -> 600L
+            }
+
+            if (stats.totalMinutes >= unlockThreshold) {
                 NightOwlPersonalityCard(
                     minutesByHour = stats.nightOwlMinutesByHour,
                     modifier = Modifier.padding(horizontal = 24.dp)
@@ -121,7 +129,7 @@ fun ListeningStatsScreenContent(
             } else {
                 PersonalityLockedCard(
                     totalMinutes = stats.totalMinutes,
-                    targetMinutes = PERSONALITY_UNLOCK_MINUTES,
+                    targetMinutes = unlockThreshold,
                     modifier = Modifier.padding(horizontal = 24.dp)
                 )
             }
@@ -696,7 +704,18 @@ fun PersonalityLockedCard(
         currentHours > 0 -> "$currentHours hr"
         else -> "$currentMins min"
     }
-    val targetHours = targetMinutes / 60L
+    
+    val targetText = if (targetMinutes % 60L == 0L) {
+        val hours = targetMinutes / 60L
+        if (hours == 1L) "1 hour" else "$hours hours"
+    } else if (targetMinutes < 60L) {
+        "$targetMinutes minutes"
+    } else {
+        val hrs = targetMinutes / 60L
+        val mins = targetMinutes % 60L
+        "$hrs hr $mins min"
+    }
+    
     val pct = (progress * 100).toInt()
 
     GlassCard(
@@ -745,7 +764,7 @@ fun PersonalityLockedCard(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Unlocks after $targetHours hours of listening — keep playing to reveal your music rhythm.",
+                        text = "Unlocks after $targetText of listening — keep playing to reveal your music rhythm.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -788,7 +807,7 @@ fun PersonalityLockedCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "$progressText / $targetHours hrs",
+                    text = "$progressText / $targetText",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
