@@ -1155,6 +1155,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     } // NavHost
+                    com.aeswox.arcmusic.ui.components.GlobalProgressOverlay()
                                         } // Box (applyHazeAndBackdrop)
                                         
                                         // ── Gradient scrim behind bottom chrome ──────────────────────────────
