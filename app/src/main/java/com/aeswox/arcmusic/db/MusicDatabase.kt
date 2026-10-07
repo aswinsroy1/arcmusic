@@ -43,6 +43,7 @@ abstract class MusicDatabase : RoomDatabase() {
     abstract fun discoveryDao(): DiscoveryDao
     abstract fun newSongDao(): NewSongDao
     abstract fun trendingDao(): TrendingDao
+    abstract fun backupDao(): BackupDao
 
     companion object {
         val MIGRATION_20_21 = object : Migration(20, 21) {

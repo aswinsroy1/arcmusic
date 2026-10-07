@@ -1,6 +1,7 @@
 package com.aeswox.arcmusic
 
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,6 +49,7 @@ import com.aeswox.arcmusic.db.entities.Album
 import com.aeswox.arcmusic.ui.animations.jellyClick
 import com.aeswox.arcmusic.ui.animations.jelly
 import com.aeswox.arcmusic.ui.components.*
+import com.aeswox.arcmusic.db.entities.getQualityBadgeResId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,10 +120,10 @@ fun ArtistDetailsScreen(
                 ArtistHeroSection(artist = artist, tracks = tracks, viewModel = viewModel)
             }
             item {
-                ArtistPopularSection(tracks = tracks, viewModel = viewModel, onNavigateToAllTracks = { onNavigateToAllTracks(artistId) })
+                ArtistAlbumsSection(albums = albums, onNavigateToAlbum = onNavigateToAlbum, onNavigateToAllAlbums = { onNavigateToAllAlbums(artistId) })
             }
             item {
-                ArtistAlbumsSection(albums = albums, onNavigateToAlbum = onNavigateToAlbum, onNavigateToAllAlbums = { onNavigateToAllAlbums(artistId) })
+                ArtistPopularSection(tracks = tracks, viewModel = viewModel, onNavigateToAllTracks = { onNavigateToAllTracks(artistId) })
             }
             item {
                 ArtistAboutSection(artist = artist)
@@ -279,6 +281,56 @@ fun ArtistHeroSection(artist: Artist?, tracks: List<Track>, viewModel: MusicView
             
             Spacer(modifier = Modifier.height(24.dp))
             
+            val totalDurationMs = tracks.sumOf { it.durationMs }
+            val hours = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(totalDurationMs)
+            val minutes = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(totalDurationMs) % 60
+            val durationText = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${tracks.size} songs",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = durationText,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -311,50 +363,76 @@ fun ArtistHeroSection(artist: Artist?, tracks: List<Track>, viewModel: MusicView
 
 @Composable
 fun ArtistPopularSection(tracks: List<Track>, viewModel: MusicViewModel, onNavigateToAllTracks: () -> Unit = {}) {
-    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Tracks",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.jellyClick { onNavigateToAllTracks() }) {
-                Text(
-                    text = "See all",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
-                )
+    var expanded by remember { mutableStateOf(false) }
+    var displayLimit by remember { androidx.compose.runtime.mutableIntStateOf(5) }
+
+    androidx.compose.runtime.LaunchedEffect(expanded, tracks) {
+        if (expanded) {
+            var current = displayLimit
+            while (current < tracks.size) {
+                current = (current + 20).coerceAtMost(tracks.size)
+                displayLimit = current
+                kotlinx.coroutines.delay(16)
             }
+        } else {
+            displayLimit = 5
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
+    }
+
+    val displayTracks = if (tracks.size <= 6) tracks else tracks.take(displayLimit)
+
+    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
         if (tracks.isNotEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(32.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+                    .animateContentSize(androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
                     .padding(vertical = 12.dp)
             ) {
-                tracks.take(5).forEachIndexed { index, track ->
+                Text(
+                    text = "TRACKS",
+                    style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 72.dp, end = 24.dp, bottom = 16.dp)
+                )
+
+                displayTracks.forEachIndexed { index, track ->
+                    val mins = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(track.durationMs)
+                    val secs = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(track.durationMs) % 60
+                    val durString = String.format("%d:%02d", mins, secs)
+                    
                     ArtistTrackItem(
                         number = index + 1, 
                         title = track.title, 
-                        subtitle = if (track.playCount > 0) "${track.playCount} plays" else "", 
-                        imageUrl = track.albumId?.let { "content://media/external/audio/albumart/$it" } ?: "",
+                        duration = durString,
+                        qualityBadgeResId = track.getQualityBadgeResId(),
                         onClick = { viewModel.setCurrentlyPlaying(track, tracks) }
                     )
+                }
+
+                if (!expanded && tracks.size > 6) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .jellyClick { expanded = true }
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Show more",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -362,62 +440,62 @@ fun ArtistPopularSection(tracks: List<Track>, viewModel: MusicViewModel, onNavig
 }
 
 @Composable
-fun ArtistTrackItem(number: Int, title: String, subtitle: String, imageUrl: String, onClick: () -> Unit = {}) {
+fun ArtistTrackItem(number: Int, title: String, duration: String, qualityBadgeResId: Int?, onClick: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
             .jellyClick { onClick() }
-            .padding(12.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = number.toString(),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(24.dp)
-        )
-        AsyncImage(
-            model = imageUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-        )
+        Box(modifier = Modifier.width(32.dp), contentAlignment = Alignment.Center) {
+            Text(
+                text = number.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+        }
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
-        JellyIconButton(onClick = { }) {
-            Icon(
-                imageVector = HugeIcons.MoreVert,
-                contentDescription = "More",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+        Spacer(modifier = Modifier.width(16.dp))
+        if (qualityBadgeResId != null) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = qualityBadgeResId),
+                contentDescription = "Quality",
+                modifier = Modifier.height(16.dp),
+                contentScale = ContentScale.Fit,
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant)
             )
+            Spacer(modifier = Modifier.width(12.dp))
         }
+        Text(
+            text = duration,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
     }
 }
 
 @Composable
 fun ArtistAlbumsSection(albums: List<Album>, onNavigateToAlbum: (String) -> Unit, onNavigateToAllAlbums: () -> Unit = {}) {
-    Column(modifier = Modifier.padding(top = 32.dp)) {
-        Row(
+    if (albums.isEmpty()) return
+    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(32.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+                .padding(vertical = 24.dp)
+        ) {
+            Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
@@ -429,19 +507,6 @@ fun ArtistAlbumsSection(albums: List<Album>, onNavigateToAlbum: (String) -> Unit
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.jellyClick { onNavigateToAllAlbums() }) {
-                Text(
-                    text = "See all",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
         }
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -463,6 +528,7 @@ modifier = Modifier.physicsBounceOverscroll(isHorizontal = true),
             }
         }
     }
+}
 }
 
 @Composable
@@ -506,6 +572,10 @@ fun ArtistAlbumItem(title: String, year: String, imageUrl: String, onClick: () -
 
 @Composable
 fun ArtistAboutSection(artist: Artist?) {
+    var expanded by remember { mutableStateOf(false) }
+    var hasOverflow by remember { mutableStateOf(false) }
+    val bio = artist?.bioText ?: "No artist info available yet."
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -518,30 +588,51 @@ fun ArtistAboutSection(artist: Artist?) {
             color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(32.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
-                .jellyClick { }
-                .padding(24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+                .animateContentSize(androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
+                .padding(vertical = 12.dp)
         ) {
             Text(
-                text = artist?.bioText ?: "No artist info available yet.",
+                text = bio,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-                lineHeight = 24.sp
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+                lineHeight = 24.sp,
+                maxLines = if (expanded) Int.MAX_VALUE else 5,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { textLayoutResult ->
+                    if (!expanded && textLayoutResult.hasVisualOverflow) {
+                        hasOverflow = true
+                    }
+                }
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp)
-            )
+            
+            if (hasOverflow && !expanded) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .jellyClick { expanded = true }
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Show more",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
     }
 }

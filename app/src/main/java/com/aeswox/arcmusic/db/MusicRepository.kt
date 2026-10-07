@@ -401,17 +401,22 @@ class MusicRepository(
     
     suspend fun logPlayStart(trackId: String): Long = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        val id = playHistoryDao.insertPlayHistory(
-            PlayHistory(
-                trackId = trackId,
-                timestamp = now,
-                playedMs = -1L,
-                completed = false,
-                skipReason = null
+        try {
+            val id = playHistoryDao.insertPlayHistory(
+                PlayHistory(
+                    trackId = trackId,
+                    timestamp = now,
+                    playedMs = -1L,
+                    completed = false,
+                    skipReason = null
+                )
             )
-        )
-        trackDao.incrementPlayCountAndUpdateLastPlayed(trackId, now)
-        id
+            trackDao.incrementPlayCountAndUpdateLastPlayed(trackId, now)
+            id
+        } catch (e: Exception) {
+            android.util.Log.e("MusicRepository", "Failed to log play start for track $trackId (maybe external track)", e)
+            -1L
+        }
     }
 
     suspend fun markPlayCompleted(trackId: String, playedMs: Long) = withContext(Dispatchers.IO) {

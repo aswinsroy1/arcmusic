@@ -245,7 +245,24 @@ class MainActivity : ComponentActivity() {
             }
 
 
-            ArcMusicTheme(darkTheme = isDarkTheme) {
+            val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+            val currentConfig = androidx.compose.ui.platform.LocalConfiguration.current
+            val fontScale by viewModel.fontScale.collectAsState()
+            val overrideFontScaleEnabled by viewModel.overrideFontScaleEnabled.collectAsState()
+            
+            val fontScaleValue = if (overrideFontScaleEnabled) fontScale else currentDensity.fontScale
+            
+            val newConfig = android.content.res.Configuration(currentConfig).apply {
+                if (overrideFontScaleEnabled && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    fontWeightAdjustment = 0
+                }
+            }
+            
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(currentDensity.density, fontScale = fontScaleValue),
+                androidx.compose.ui.platform.LocalConfiguration provides newConfig
+            ) {
+                ArcMusicTheme(darkTheme = isDarkTheme) {
                 val baseBg = MaterialTheme.colorScheme.background
                 val appBackdrop = com.aeswox.arcmusic.backdrop.backdrops.rememberLayerBackdrop {
                     drawRect(baseBg)
@@ -879,6 +896,7 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToNowPlayingStyleSettings = { navController.navigate("now_playing_style_settings") },
                                     onNavigateToCanvasSettings = { navController.navigate("canvas_settings") },
                                     onNavigateToAppIcon = { navController.navigate("app_icon") },
+                                    onNavigateToBackupRestore = { navController.navigate("backup_restore") },
                                     onNavigateBack = { navController.popBackStack() },
                                     onScanMediaStore = {
                                         if (settingsPermissionsState.allPermissionsGranted) {
@@ -915,6 +933,20 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         composable(
+                            route = "backup_restore",
+                            enterTransition = { NavTransitions.SheetEnter },
+                            exitTransition = { NavTransitions.SheetExit },
+                            popEnterTransition = { NavTransitions.SheetPopEnter },
+                            popExitTransition = { NavTransitions.SheetPopExit }
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                                com.aeswox.arcmusic.ui.screens.BackupRestoreScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    bottomPadding = 24.dp
+                                )
+                            }
+                        }
+                        composable(
                             route = "developer_options",
                             enterTransition = { NavTransitions.SheetEnter },
                             exitTransition = { NavTransitions.SheetExit },
@@ -943,6 +975,7 @@ class MainActivity : ComponentActivity() {
                             val seekbarUnplayedStroke by viewModel.seekbarUnplayedStroke.collectAsState()
                             val seekbarBloomDuration by viewModel.seekbarBloomDuration.collectAsState()
                             val coilDiskCacheLimitMb by viewModel.coilDiskCacheLimitMb.collectAsState()
+                            val immersiveModeEnabled by viewModel.immersiveModeEnabled.collectAsState()
                             Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                                 DeveloperSettingsScreen(
                                     onNavigateBack = { navController.popBackStack() },
@@ -960,10 +993,16 @@ class MainActivity : ComponentActivity() {
                                     noiseFactor = noiseFactor,
                                     glowIntensity = glowIntensity,
                                     coilDiskCacheLimitMb = coilDiskCacheLimitMb,
+                                    overrideFontScaleEnabled = overrideFontScaleEnabled,
+                                    onOverrideFontScaleEnabledChange = { viewModel.setOverrideFontScaleEnabled(it) },
+                                    fontScale = fontScale,
+                                    onFontScaleChange = { viewModel.setFontScale(it) },
                                     onTintTransparencyChange = { viewModel.setTintTransparency(it) },
                                     onNoiseFactorChange = { viewModel.setNoiseFactor(it) },
                                     onGlowIntensityChange = { viewModel.setGlowIntensity(it) },
                                     onCoilDiskCacheLimitMbChange = { viewModel.setCoilDiskCacheLimitMb(it) },
+                                    immersiveModeEnabled = immersiveModeEnabled,
+                                    onImmersiveModeEnabledChange = { viewModel.setImmersiveModeEnabled(it) },
                                     physicsMass = physicsMass,
                                     physicsStiffness = physicsStiffness,
                                     physicsDampingRatio = physicsDampingRatio,
@@ -1358,6 +1397,7 @@ class MainActivity : ComponentActivity() {
         } // end Box A (AnimatedSplashScreen container)
         } // end CompositionLocalProvider (JigglePhysics)
     } // end ArcMusicTheme
+            } // end CompositionLocalProvider
 } // end setContent
     } // end onCreate
 } // end MainActivity
@@ -1761,6 +1801,15 @@ fun HeroSection(
                 }
             }
         }
+
+        LaunchedEffect(pagerState.isScrollInProgress) {
+            if (!pagerState.isScrollInProgress && kotlin.math.abs(pagerState.currentPageOffsetFraction) > 0.01f) {
+                pagerState.animateScrollToPage(
+                    page = pagerState.currentPage,
+                    animationSpec = springSpec
+                )
+            }
+        }
         
         androidx.compose.foundation.pager.HorizontalPager(
             state = pagerState,
@@ -1882,48 +1931,84 @@ fun HeroSection(
                 )
 
                 if (isNowPlayingMode && syncedLines.isNotEmpty()) {
-                    val activeRows = arcActiveLyricRows(syncedLines, clock.longValue)
-                    val activeLine = activeRows.firstOrNull()?.let { syncedLines[it] }
-                    
-                    if (activeLine != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 24.dp)
-                                .padding(bottom = 60.dp), // offset to avoid overlapping title
-                            contentAlignment = Alignment.Center
-                        ) {
-                            androidx.compose.animation.AnimatedContent(
-                                targetState = activeLine,
-                                transitionSpec = {
-                                    val duration = 340
-                                    val outDuration = 306
-                                    (androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) +
-                                        androidx.compose.animation.slideInVertically(animationSpec = androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { height -> (height * 0.35f).toInt() })
-                                        .togetherWith(
-                                            androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(outDuration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) +
-                                            androidx.compose.animation.slideOutVertically(animationSpec = androidx.compose.animation.core.tween(outDuration, easing = androidx.compose.animation.core.FastOutSlowInEasing)) { height -> -(height * 0.35f).toInt() }
-                                        ).using(
-                                            androidx.compose.animation.SizeTransform(clip = false, sizeAnimationSpec = { _, _ -> androidx.compose.animation.core.tween(duration, easing = androidx.compose.animation.core.FastOutSlowInEasing) })
+                    val activeLine = syncedLines.firstOrNull { 
+                        currentPosition >= it.time && currentPosition <= it.lineEndMs() 
+                    } ?: syncedLines.lastOrNull { currentPosition >= it.time }
+
+                    val clock = rememberArcLyricClock(currentPosition, isActuallyPlaying)
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp)
+                            .padding(bottom = 100.dp), // Anchored above the title column
+                        contentAlignment = Alignment.BottomStart
+                    ) {
+                        androidx.compose.animation.AnimatedContent(
+                            targetState = activeLine,
+                            transitionSpec = {
+                                val slideDistance = 150 // fixed pixel distance so they travel at exactly the same speed
+                                (androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(300)) +
+                                    androidx.compose.animation.slideInVertically(
+                                        animationSpec = androidx.compose.animation.core.spring(
+                                            dampingRatio = 0.8f,
+                                            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
                                         )
-                                },
-                                label = "lyric_transition",
-                                modifier = Modifier.fillMaxWidth()
-                            ) { line ->
-                                ArcSweptLyricLine(
-                                    line = line,
-                                    clock = clock,
-                                    style = MaterialTheme.typography.headlineLarge.copy(
-                                        fontSize = 24.sp,
-                                        lineHeight = 36.sp,
+                                    ) { slideDistance })
+                                    .togetherWith(
+                                        androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(300)) +
+                                        androidx.compose.animation.slideOutVertically(
+                                            animationSpec = androidx.compose.animation.core.spring(
+                                                dampingRatio = 0.8f,
+                                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                                            )
+                                        ) { -slideDistance }
+                                    ).using(
+                                        androidx.compose.animation.SizeTransform(clip = false)
+                                    )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { line ->
+                            if (line != null && line.line.isNotBlank()) {
+                                androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                                    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+                                    val baseStyle = MaterialTheme.typography.headlineLarge.copy(
                                         fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
-                                    ),
-                                    dimAlpha = 0.45f,
-                                    textColor = MaterialTheme.colorScheme.onSurface,
-                                    feather = true,
-                                    alignEnd = false,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                    )
+                                    
+                                    var currentFontSize = 24f
+                                    var currentLineHeight = 36f
+                                    
+                                    var measuredLayout = textMeasurer.measure(
+                                        text = androidx.compose.ui.text.AnnotatedString(line.line),
+                                        style = baseStyle.copy(fontSize = currentFontSize.sp, lineHeight = currentLineHeight.sp),
+                                        constraints = androidx.compose.ui.unit.Constraints(maxWidth = constraints.maxWidth)
+                                    )
+
+                                    while (measuredLayout.lineCount > 3 && currentFontSize > 12f) {
+                                        currentFontSize -= 2f
+                                        currentLineHeight -= 3f
+                                        measuredLayout = textMeasurer.measure(
+                                            text = androidx.compose.ui.text.AnnotatedString(line.line),
+                                            style = baseStyle.copy(fontSize = currentFontSize.sp, lineHeight = currentLineHeight.sp),
+                                            constraints = androidx.compose.ui.unit.Constraints(maxWidth = constraints.maxWidth)
+                                        )
+                                    }
+
+                                    ArcSweptLyricLine(
+                                        line = line,
+                                        clock = clock,
+                                        style = baseStyle.copy(
+                                            fontSize = currentFontSize.sp,
+                                            lineHeight = currentLineHeight.sp
+                                        ),
+                                        dimAlpha = 0.45f,
+                                        textColor = MaterialTheme.colorScheme.onSurface,
+                                        feather = true,
+                                        alignEnd = false,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
                         }
                     }
@@ -2126,13 +2211,11 @@ fun RecentlyPlayedItem(song: Track, onSongClick: (Track) -> Unit = {}) {
                 overflow = TextOverflow.Ellipsis
             )
         }
-        JellyIconButton(onClick = {}) {
-            Icon(
-                imageVector = HugeIcons.MoreVert, 
-                contentDescription = "More",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        Text(
+            text = formatDuration(song.durationMs),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
     }
 }
 
@@ -2469,6 +2552,7 @@ fun SearchScreenContent(viewModel: MusicViewModel, modifier: Modifier = Modifier
     val geminiApiKey by viewModel.geminiApiKey.collectAsState()
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var selectedFilter by rememberSaveable { mutableStateOf("All") }
+    var aiQuery by rememberSaveable { mutableStateOf("") }
     val isAiMode = selectedFilter == "AI"
     
     // Reset selected filter when search query transitions between empty and active
@@ -2497,32 +2581,32 @@ fun SearchScreenContent(viewModel: MusicViewModel, modifier: Modifier = Modifier
             )
         }
         item {
-            if (isAiMode) {
-                AiSearchBar(
-                    onSearch = { prompt ->
-                        viewModel.performAiSearch(prompt)
-                        keyboardController?.hide()
-                    },
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
-            } else {
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = { viewModel.updateSearchQuery(it) },
-                    onSearch = { 
+            SearchBar(
+                query = if (isAiMode) aiQuery else searchQuery,
+                onQueryChange = { 
+                    if (isAiMode) aiQuery = it else viewModel.updateSearchQuery(it)
+                },
+                onSearch = { 
+                    if (isAiMode) {
+                        viewModel.performAiSearch(aiQuery)
+                    } else {
                         viewModel.saveRecentSearch(searchQuery)
-                        keyboardController?.hide()
-                    },
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
-            }
+                    }
+                    keyboardController?.hide()
+                },
+                isAiMode = isAiMode,
+                showAiIcon = !geminiApiKey.isNullOrBlank(),
+                onAiToggle = {
+                    selectedFilter = if (isAiMode) "All" else "AI"
+                },
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
         }
         item {
             FilterChips(
                 isSearchActive = if (isAiMode) false else searchQuery.isNotEmpty(),
                 selectedFilter = selectedFilter,
-                onFilterSelected = { selectedFilter = it },
-                showAiChip = !geminiApiKey.isNullOrBlank()
+                onFilterSelected = { selectedFilter = it }
             )
         }
 
@@ -2684,6 +2768,9 @@ fun SearchBar(
     query: String = "",
     onQueryChange: (String) -> Unit = {},
     onSearch: () -> Unit = {},
+    isAiMode: Boolean = false,
+    showAiIcon: Boolean = true,
+    onAiToggle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var textFieldValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(text = query)) }
@@ -2694,18 +2781,28 @@ fun SearchBar(
         }
     }
 
+    val backgroundColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isAiMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = androidx.compose.animation.core.tween(300)
+    )
+
+    val iconTint by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isAiMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = androidx.compose.animation.core.tween(300)
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(32.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(backgroundColor)
             .padding(horizontal = 24.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = HugeIcons.Search,
+            imageVector = if (isAiMode) Icons.Outlined.AutoAwesome else HugeIcons.Search,
             contentDescription = "Search",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = iconTint
         )
         Spacer(modifier = Modifier.width(12.dp))
         androidx.compose.foundation.text.BasicTextField(
@@ -2724,7 +2821,7 @@ fun SearchBar(
             decorationBox = { innerTextField ->
                 if (textFieldValue.text.isEmpty()) {
                     Text(
-                        text = "Search songs, albums, artists...",
+                        text = if (isAiMode) "Describe the music you want..." else "Search songs, albums, artists...",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
@@ -2733,71 +2830,19 @@ fun SearchBar(
             }
         )
         if (textFieldValue.text.isEmpty()) {
-            JellyIconButton(onClick = { }) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = "Mic",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+            if (showAiIcon) {
+                JellyIconButton(onClick = onAiToggle) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = "AI Mode",
+                        tint = iconTint
+                    )
+                }
             }
         } else {
             JellyIconButton(onClick = { 
                 textFieldValue = androidx.compose.ui.text.input.TextFieldValue("")
                 onQueryChange("") 
-            }) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Clear",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun AiSearchBar(
-    onSearch: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var textFieldValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue("")) }
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(32.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
-            .padding(horizontal = 24.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.AutoAwesome,
-            contentDescription = "AI Search",
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        androidx.compose.foundation.text.BasicTextField(
-            value = textFieldValue,
-            onValueChange = { textFieldValue = it },
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-            modifier = Modifier.weight(1f).padding(vertical = 12.dp),
-            singleLine = true,
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch(textFieldValue.text) }),
-            decorationBox = { innerTextField ->
-                if (textFieldValue.text.isEmpty()) {
-                    Text(
-                        text = "Describe the music you want...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
-                innerTextField()
-            }
-        )
-        if (textFieldValue.text.isNotEmpty()) {
-            JellyIconButton(onClick = { 
-                textFieldValue = androidx.compose.ui.text.input.TextFieldValue("")
             }) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -2891,19 +2936,11 @@ fun AiSearchErrorState(message: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun FilterChips(isSearchActive: Boolean = false, selectedFilter: String, onFilterSelected: (String) -> Unit, modifier: Modifier = Modifier, showAiChip: Boolean = false) {
-    val baseFilters = if (isSearchActive) {
+fun FilterChips(isSearchActive: Boolean = false, selectedFilter: String, onFilterSelected: (String) -> Unit, modifier: Modifier = Modifier) {
+    val filters = if (isSearchActive) {
         listOf("All", "Top result", "Songs", "Albums", "Artists", "Playlists")
     } else {
         listOf("All", "Songs", "Albums", "Artists", "Playlists", "Genres")
-    }
-    
-    val filters = if (showAiChip && !isSearchActive) {
-        listOf("AI") + baseFilters
-    } else if (showAiChip && isSearchActive && selectedFilter == "AI") {
-        listOf("AI") + baseFilters
-    } else {
-        baseFilters
     }
 
     LazyRow(

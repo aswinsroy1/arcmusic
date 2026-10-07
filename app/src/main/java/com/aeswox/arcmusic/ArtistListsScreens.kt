@@ -1,5 +1,6 @@
 package com.aeswox.arcmusic
 
+import com.aeswox.arcmusic.db.entities.getQualityBadgeResId
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -80,11 +81,15 @@ fun ArtistTracksScreen(
         ) {
             items(tracks.size) { index ->
                 val track = tracks[index]
+                val mins = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(track.durationMs)
+                val secs = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(track.durationMs) % 60
+                val durString = String.format("%d:%02d", mins, secs)
+                
                 ArtistTrackItem(
                     number = index + 1,
                     title = track.title,
-                    subtitle = if (track.playCount > 0) "${track.playCount} plays" else "",
-                    imageUrl = track.albumId?.let { "content://media/external/audio/albumart/$it" } ?: "",
+                    duration = durString,
+                    qualityBadgeResId = track.getQualityBadgeResId(),
                     onClick = { viewModel.setCurrentlyPlaying(track, tracks) }
                 )
             }

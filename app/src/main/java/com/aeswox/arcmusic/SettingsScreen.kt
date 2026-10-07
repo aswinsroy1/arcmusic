@@ -70,6 +70,7 @@ fun SettingsScreen(
     onNavigateToNowPlayingStyleSettings: () -> Unit,
     onNavigateToCanvasSettings: () -> Unit,
     onNavigateToAppIcon: () -> Unit,
+    onNavigateToBackupRestore: () -> Unit,
     onNavigateBack: () -> Unit,
     onScanMediaStore: () -> Unit = {},
     onRunDeepScan: () -> Unit = {},
@@ -249,7 +250,6 @@ fun SettingsScreen(
                 
                 item {
                     SettingsGroup(title = "PLAYBACK") {
-                        SettingsItem(icon = Icons.Outlined.MusicNote, text = "Playback", enabled = false)
                         SettingsItem(icon = Icons.Outlined.Tune, text = "Equalizer", onClick = onNavigateToEqualizer)
                         SettingsItem(
                             icon = HugeIcons.Autoplay,
@@ -420,6 +420,12 @@ fun SettingsScreen(
                             text = "Export M3U Playlist",
                             onClick = { showExportPlaylistDialog = true },
                             showArrow = false
+                        )
+                        SettingsItem(
+                            icon = Icons.Outlined.SettingsBackupRestore,
+                            text = "Backup & Restore",
+                            onClick = onNavigateToBackupRestore,
+                            showArrow = true
                         )
                     }
                 }

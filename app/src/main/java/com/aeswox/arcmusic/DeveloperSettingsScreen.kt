@@ -84,6 +84,12 @@ fun DeveloperSettingsScreen(
     onUnplayedStrokeChange: (Float) -> Unit,
     bloomDuration: Float,
     onBloomDurationChange: (Float) -> Unit,
+    overrideFontScaleEnabled: Boolean = false,
+    onOverrideFontScaleEnabledChange: (Boolean) -> Unit = {},
+    fontScale: Float = 1.0f,
+    onFontScaleChange: (Float) -> Unit = {},
+    immersiveModeEnabled: Boolean = false,
+    onImmersiveModeEnabledChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -112,6 +118,66 @@ fun DeveloperSettingsScreen(
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // UI Experiments
+            ExpandableSettingsCard(
+                title = "UI Experiments",
+                onReset = {
+                    onImmersiveModeEnabledChange(false)
+                }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Immersive Mode",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = immersiveModeEnabled,
+                        onCheckedChange = { onImmersiveModeEnabledChange(it) }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Accessibility
+            ExpandableSettingsCard(
+                title = "Accessibility (Experimental)",
+                onReset = {
+                    onOverrideFontScaleEnabledChange(false)
+                    onFontScaleChange(1.0f)
+                }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Override System Font Scale",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = overrideFontScaleEnabled,
+                        onCheckedChange = { onOverrideFontScaleEnabledChange(it) }
+                    )
+                }
+                
+                if (overrideFontScaleEnabled) {
+                    SliderRow(
+                        label = "Font Scale",
+                        value = fontScale,
+                        onValueChange = onFontScaleChange,
+                        valueRange = 0.7f..1.3f
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
 
             // Glass & Glow Engine

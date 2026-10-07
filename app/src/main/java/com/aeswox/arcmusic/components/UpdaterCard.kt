@@ -10,6 +10,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,8 +45,8 @@ fun UpdaterOverlay(
 ) {
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(tween(800, easing = LinearOutSlowInEasing)),
-        exit = fadeOut(tween(200, easing = FastOutLinearInEasing))
+        enter = fadeIn(tween(300)),
+        exit = fadeOut(tween(200))
     ) {
         Box(
             modifier = Modifier
@@ -63,20 +64,17 @@ fun UpdaterOverlay(
         ) {
             AnimatedVisibility(
                 visible = isVisible,
-                enter = slideInVertically(
-                    initialOffsetY = { 80 },
-                    animationSpec = tween(800, easing = LinearOutSlowInEasing)
-                ) + scaleIn(
-                    initialScale = 0.95f,
-                    animationSpec = tween(800, easing = LinearOutSlowInEasing)
-                ) + fadeIn(tween(800, easing = LinearOutSlowInEasing)),
-                exit = slideOutVertically(
-                    targetOffsetY = { 50 },
-                    animationSpec = tween(200, easing = FastOutLinearInEasing)
-                ) + scaleOut(
-                    targetScale = 0.95f,
-                    animationSpec = tween(200, easing = FastOutLinearInEasing)
-                ) + fadeOut(tween(200, easing = FastOutLinearInEasing))
+                enter = fadeIn(tween(300)) + slideInVertically(
+                    initialOffsetY = { it / 4 },
+                    animationSpec = androidx.compose.animation.core.spring(
+                        dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                        stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                    )
+                ),
+                exit = fadeOut(tween(200)) + slideOutVertically(
+                    targetOffsetY = { it / 4 },
+                    animationSpec = tween(200)
+                )
             ) {
                 Box(
                     modifier = Modifier.clickable(
@@ -106,7 +104,12 @@ fun UpdaterCard(
     Card(
         modifier = Modifier
             .fillMaxWidth(0.9f)
-            .heightIn(max = 500.dp),
+            .heightIn(max = 500.dp)
+            .animateContentSize(
+                animationSpec = androidx.compose.animation.core.spring(
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                )
+            ),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(com.aeswox.arcmusic.AppCornerRadius),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh

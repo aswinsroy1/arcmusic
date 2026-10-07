@@ -395,7 +395,7 @@ class NearbySharingManager @Inject constructor(
                         }
                     }
                     is SharePayload.Playlist -> {
-                        val tracks = repository.getTracksForPlaylistById(payload.playlistId).first()
+                        val tracks = repository.getTracksForPlaylist(payload.playlistId).first()
                         if (tracks.isNotEmpty()) {
                             val sb = StringBuilder()
                             sb.append("#EXTM3U\n")
@@ -415,6 +415,7 @@ class NearbySharingManager @Inject constructor(
                                 put("type", "playlist_m3u")
                                 put("payloadId", m3uPayload.id)
                                 put("playlistName", payload.playlistId)
+                                put("totalCount", tracks.size + 1)
                             }
                             
                             val metadataPayload = Payload.fromBytes(m3uMetadata.toString().toByteArray(Charsets.UTF_8))
@@ -426,16 +427,31 @@ class NearbySharingManager @Inject constructor(
                             connectionsClient.sendPayload(endpointId, m3uPayload)
                             
                             payloadQueue.addAll(tracks)
+                            
+                            totalFileCount = tracks.size + 1
+                            completedFileCount = 0
+                            _totalTransferCount.value = totalFileCount
+                            _completedTransferCount.value = completedFileCount
+                            filePayloadIds.clear()
+                            filePayloadIds.add(m3uPayload.id)
+                        } else {
+                            totalFileCount = 0
+                            completedFileCount = 0
+                            _totalTransferCount.value = totalFileCount
+                            _completedTransferCount.value = completedFileCount
+                            filePayloadIds.clear()
                         }
                     }
                 }
                 
-                // Initialise unified progress counters now that we know the full batch size
-                totalFileCount = payloadQueue.size
-                completedFileCount = 0
-                _totalTransferCount.value = totalFileCount
-                _completedTransferCount.value = completedFileCount
-                filePayloadIds.clear()
+                if (payload !is SharePayload.Playlist) {
+                    // Initialise unified progress counters now that we know the full batch size
+                    totalFileCount = payloadQueue.size
+                    completedFileCount = 0
+                    _totalTransferCount.value = totalFileCount
+                    _completedTransferCount.value = completedFileCount
+                    filePayloadIds.clear()
+                }
 
                 if (activePayloads.isEmpty() && payloadQueue.isNotEmpty()) {
                     processNextInQueue()

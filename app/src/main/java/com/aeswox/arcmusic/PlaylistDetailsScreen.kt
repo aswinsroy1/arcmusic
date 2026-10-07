@@ -1,6 +1,7 @@
 package com.aeswox.arcmusic
 
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,6 +39,7 @@ import com.aeswox.arcmusic.ui.components.JellyFilledTonalIconButton
 import com.aeswox.arcmusic.ui.components.JellyOutlinedIconButton
 import com.aeswox.arcmusic.ui.components.MorphingMenu
 import com.aeswox.arcmusic.ui.components.MorphingMenuItem
+import com.aeswox.arcmusic.db.entities.getQualityBadgeResId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,247 +85,94 @@ fun PlaylistDetailsScreen(
         ?: firstTrackWithArt?.albumId?.let { "content://media/external/audio/albumart/$it" }
         ?: "https://lh3.googleusercontent.com/aida-public/AB6AXuDK2gSPmhFiKqcqPLlCJlIp7lxpTt2scS9SuOmzxmZKXa1UQIjSKITZh8tGxaLLsMWtK_rqugpIF6kWjdqifIFpbIHQ51KFkHHGCwprGn7T1jWwAFiUiOgft22mJtHc311emev_Y9qChhO44k-VwJC7dvX80Zs-JHFurqrp7BRfflgHO2uz-vspGyR9BoWhQUaXuELDgddlmK__JFlAjdrkjKUgyxH0SVRHhhE0iqWq7lQMTieDIl6s1Oh1frE5nhxruwt9dXwi3SRK" // Fallback
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.physicsBounceOverscroll().fillMaxSize(),
-            contentPadding = PaddingValues(bottom = bottomPadding) // space for mini player
-        ) {
-            item {
-                // Top App Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppIconButton(
-                        icon = HugeIcons.ArrowLeft,
-                        contentDescription = "Back",
-                        onClick = onNavigateBack,
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MorphingMenu(
-                            items = listOf(
-                                MorphingMenuItem(
-                                    text = "Edit playlist",
-                                    icon = com.aeswox.arcmusic.ui.components.HugeIcons.Edit,
-                                    onClick = { showEditDialog = true }
-                                ),
-                                MorphingMenuItem(
-                                    text = "Share playlist",
-                                    icon = Icons.Default.IosShare,
-                                    onClick = { onNavigateToShare("playlist", playlistId) }
-                                ),
-                                MorphingMenuItem(
-                                    text = "Delete playlist",
-                                    icon = HugeIcons.Delete,
-                                    isDestructive = true,
-                                    onClick = { showDeleteConfirmDialog = true }
-                                )
-                            ),
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
+    val menuItems = remember(playlist, tracks) {
+        val list = mutableListOf<MorphingMenuItem>()
+        if (tracks.isNotEmpty() && playlist != null) {
+            list.add(
+                MorphingMenuItem(
+                    text = "Play next",
+                    icon = Icons.Default.QueueMusic,
+                    onClick = {
+                        viewModel.addSelectedItemsToQueue(listOf("playlist_${playlist!!.name}"), playNext = true)
                     }
-                }
-            }
-
-            item {
-                // Hero Section
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    AsyncImage(
-                        model = coverUrl,
-                        contentDescription = "Playlist Cover",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(240.dp)
-                            .clip(RoundedCornerShape(36.dp))
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Text(
-                        text = playlist?.name ?: playlistId,
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = "My Playlist",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    if (!playlist?.description.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = playlist?.description ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "${tracks.size} songs",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Schedule,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = durationText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                // Action Buttons
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 32.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppPrimaryButton(
-                        text = "Play",
-                        onClick = { 
-                            if (tracks.isNotEmpty()) {
-                                viewModel.setCurrentlyPlaying(tracks.first(), tracks)
-                            }
-                        },
-                        icon = HugeIcons.Play,
-                        modifier = Modifier.width(140.dp)
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    AppPrimaryButton(
-                        text = "Shuffle",
-                        onClick = { 
-                            if (tracks.isNotEmpty()) {
-                                val shuffled = tracks.shuffled()
-                                viewModel.setCurrentlyPlaying(shuffled.first(), shuffled)
-                            }
-                        },
-                        icon = HugeIcons.Shuffle,
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.width(140.dp)
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    AppIconButton(
-                        icon = HugeIcons.MoreHoriz,
-                        contentDescription = "More",
-                        onClick = { },
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surfaceContainerLowest, CircleShape),
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-
-            item {
-                // Tracks Container Header
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
-                        .padding(bottom = 8.dp)
-                ) {
-                    Text(
-                        text = "TRACKS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(start = 24.dp, top = 20.dp, bottom = 12.dp)
-                    )
-                }
-            }
-            
-            itemsIndexed(tracks) { index, track ->
-                val trackIsPlaying = currentlyPlaying?.id == track.id
-                val trackDurationMins = track.durationMs / (1000 * 60)
-                val trackDurationSecs = (track.durationMs % (1000 * 60)) / 1000
-                val trackDurationFormatted = String.format("%d:%02d", trackDurationMins, trackDurationSecs)
-                
-                Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
-                ) {
-                    PlaylistTrackItem(
-                        number = (index + 1).toString(),
-                        title = track.title,
-                        artist = track.artist,
-                        duration = trackDurationFormatted,
-                        isPlaying = trackIsPlaying,
-                        onClick = {
-                            viewModel.setCurrentlyPlaying(track, tracks)
-                        }
-                    )
-                }
-            }
-            
-            item {
-                // Tracks Container Footer
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .height(32.dp)
-                        .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
                 )
+            )
+            list.add(
+                MorphingMenuItem(
+                    text = "Add to queue",
+                    icon = Icons.Default.PlaylistAdd,
+                    onClick = {
+                        viewModel.addSelectedItemsToQueue(listOf("playlist_${playlist!!.name}"), playNext = false)
+                    }
+                )
+            )
+        }
+        list.add(
+            MorphingMenuItem(
+                text = "Edit playlist",
+                icon = com.aeswox.arcmusic.ui.components.HugeIcons.Edit,
+                onClick = { showEditDialog = true }
+            )
+        )
+        list.add(
+            MorphingMenuItem(
+                text = "Share playlist",
+                icon = Icons.Default.IosShare,
+                onClick = { onNavigateToShare("playlist", playlistId) }
+            )
+        )
+        list.add(
+            MorphingMenuItem(
+                text = "Delete playlist",
+                icon = HugeIcons.Delete,
+                isDestructive = true,
+                onClick = { showDeleteConfirmDialog = true }
+            )
+        )
+        list
+    }
+
+    if (playlist == null) {
+        PlaylistDetailsSkeleton(onNavigateBack = onNavigateBack)
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .physicsBounceOverscroll()
+                    .padding(horizontal = 24.dp),
+                contentPadding = PaddingValues(top = 104.dp, bottom = bottomPadding)
+            ) {
+                item {
+                    PlaylistDetailsInfo(
+                        playlist = playlist,
+                        coverUrl = coverUrl,
+                        tracks = tracks,
+                        durationText = durationText,
+                        onPlay = { viewModel.setCurrentlyPlaying(tracks.firstOrNull(), tracks) },
+                        onShuffle = { 
+                            val shuffled = tracks.shuffled()
+                            viewModel.setCurrentlyPlaying(shuffled.firstOrNull(), shuffled) 
+                        }
+                    )
+                }
+                item {
+                    PlaylistTracksList(
+                        tracks = tracks,
+                        currentlyPlaying = currentlyPlaying,
+                        isPlaying = isPlaying,
+                        onTrackClick = { track -> viewModel.setCurrentlyPlaying(track, tracks) }
+                    )
+                }
             }
+            
+            PlaylistDetailsHeader(
+                onNavigateBack = onNavigateBack, 
+                menuItems = menuItems,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 48.dp, start = 24.dp, end = 24.dp)
+            )
         }
     }
 
@@ -572,72 +421,348 @@ fun EditPlaylistSheetContent(
 }
 
 @Composable
+fun PlaylistDetailsHeader(
+    onNavigateBack: () -> Unit,
+    menuItems: List<MorphingMenuItem> = emptyList(),
+    modifier: Modifier = Modifier.fillMaxWidth()
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        JellyIconButton(
+            onClick = onNavigateBack,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+        ) {
+            Icon(
+                imageVector = HugeIcons.ArrowLeft,
+                contentDescription = "Back",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        if (menuItems.isNotEmpty()) {
+            MorphingMenu(
+                items = menuItems,
+                buttonBackground = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        } else {
+            JellyIconButton(
+                onClick = { },
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+            ) {
+                Icon(
+                    imageVector = HugeIcons.MoreVert,
+                    contentDescription = "More",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PlaylistDetailsInfo(
+    playlist: com.aeswox.arcmusic.db.entities.Playlist?,
+    coverUrl: String,
+    tracks: List<com.aeswox.arcmusic.db.entities.Track>,
+    durationText: String,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit
+) {
+    val subtitleText = "My Playlist"
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+        AsyncImage(
+            model = coverUrl,
+            contentDescription = "Playlist Cover",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(280.dp)
+                .clip(RoundedCornerShape(36.dp))
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(
+                text = playlist?.name ?: "Unknown Playlist",
+                style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 46.sp,
+                lineHeight = 52.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(vertical = 8.dp)
+            ) {
+                Text(
+                    text = subtitleText,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (!playlist?.description.isNullOrBlank()) {
+                Text(
+                    text = playlist?.description ?: "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${tracks.size} songs",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = durationText,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                JellyButton(
+                    onClick = onPlay,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(28.dp)
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.Play,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Play",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                JellyButton(
+                    onClick = onShuffle,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                    shape = RoundedCornerShape(28.dp)
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.Shuffle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Shuffle",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+fun PlaylistTracksList(
+    tracks: List<com.aeswox.arcmusic.db.entities.Track>,
+    currentlyPlaying: com.aeswox.arcmusic.db.entities.Track?,
+    isPlaying: Boolean,
+    onTrackClick: (com.aeswox.arcmusic.db.entities.Track) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var displayLimit by remember { androidx.compose.runtime.mutableIntStateOf(5) }
+
+    androidx.compose.runtime.LaunchedEffect(expanded, tracks) {
+        if (expanded) {
+            var current = displayLimit
+            while (current < tracks.size) {
+                current = (current + 20).coerceAtMost(tracks.size)
+                displayLimit = current
+                kotlinx.coroutines.delay(16)
+            }
+        } else {
+            displayLimit = 5
+        }
+    }
+
+    val displayTracks = if (tracks.size <= 6) tracks else tracks.take(displayLimit)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(32.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+            .animateContentSize(androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
+            .padding(vertical = 12.dp)
+    ) {
+        Text(
+            text = "TRACKS",
+            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 72.dp, end = 24.dp, bottom = 16.dp)
+        )
+        
+        displayTracks.forEachIndexed { index, track ->
+            val isCurrentTrack = currentlyPlaying?.id == track.id
+            val mins = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(track.durationMs)
+            val secs = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(track.durationMs) % 60
+            val durString = String.format("%d:%02d", mins, secs)
+            
+            PlaylistTrackItem(
+                number = (index + 1).toString(),
+                title = track.title,
+                artist = track.artist ?: "Unknown",
+                duration = durString,
+                qualityBadgeResId = track.getQualityBadgeResId(),
+                isPlaying = isCurrentTrack && isPlaying,
+                onClick = { onTrackClick(track) }
+            )
+        }
+        
+        if (!expanded && tracks.size > 6) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .jellyClick { expanded = true }
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Show more",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun PlaylistTrackItem(
-    number: String, 
-    title: String, 
-    artist: String, 
-    duration: String, 
+    number: String,
+    title: String,
+    artist: String,
+    duration: String,
+    qualityBadgeResId: Int? = null,
     isPlaying: Boolean = false,
     onClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .jellyClick(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .jellyClick { onClick() }
+            .background(if (isPlaying) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (isPlaying) {
-            Icon(
-                imageVector = Icons.Default.Equalizer,
-                contentDescription = "Playing",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(24.dp)
-                    .padding(end = 8.dp)
-            )
-        } else {
-            Text(
-                text = number,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.width(24.dp).padding(end = 8.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
-        
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.width(32.dp), contentAlignment = Alignment.Center) {
+            if (isPlaying) {
+                // Playing animation placeholder
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom, modifier = Modifier.height(16.dp)) {
+                    Box(modifier = Modifier.width(3.dp).height(8.dp).background(MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.width(3.dp).height(14.dp).background(MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.width(3.dp).height(10.dp).background(MaterialTheme.colorScheme.primary))
+                }
+            } else {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = number,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium),
+                color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Text(
                 text = artist,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (isPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        
+        Spacer(modifier = Modifier.width(16.dp))
+        if (qualityBadgeResId != null) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = qualityBadgeResId),
+                contentDescription = "Quality",
+                modifier = Modifier.height(16.dp),
+                contentScale = ContentScale.Fit,
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+        }
         Text(
             text = duration,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-        
-        Icon(
-            imageVector = HugeIcons.MoreVert,
-            contentDescription = "More",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp)
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
     }
 }

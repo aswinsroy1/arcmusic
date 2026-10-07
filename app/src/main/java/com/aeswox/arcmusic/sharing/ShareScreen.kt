@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Person
@@ -166,13 +167,13 @@ fun ShareScreen(
                     .padding(horizontal = 24.dp, vertical = 4.dp)
             )
 
-            // ── Device discovery card ────────────────────────────────
             DeviceDiscoveryCard(
                 sharingState = sharingState,
                 discoveredEndpoints = discoveredEndpoints,
                 transferProgress = transferProgress,
                 totalTransferCount = totalTransferCount,
                 completedTransferCount = completedTransferCount,
+                payloadLabel = payloadLabel,
                 onEndpointClick = { viewModel.requestConnection(it) },
                 onCancelTransfer = { viewModel.cancelTransfer() },
                 onNfcTokenChanged = { token ->
@@ -262,6 +263,7 @@ private fun DeviceDiscoveryCard(
     transferProgress: Float,
     totalTransferCount: Int,
     completedTransferCount: Int,
+    payloadLabel: SharePayloadDisplayInfo,
     onEndpointClick: (String) -> Unit,
     onCancelTransfer: () -> Unit,
     onNfcTokenChanged: (String?) -> Unit,
@@ -390,6 +392,7 @@ private fun DeviceDiscoveryCard(
                         progress = transferProgress,
                         totalCount = totalTransferCount,
                         completedCount = completedTransferCount,
+                        payloadLabel = payloadLabel,
                         onCancel = onCancelTransfer
                     )
                 } else if (discoveredEndpoints.isNotEmpty()) {
@@ -428,18 +431,34 @@ private fun DeviceDiscoveryCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Footer text
-            Text(
-                text = "Ensure the other device is on the Receive screen",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp),
-                textAlign = TextAlign.Center
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Ensure the other device is on the Receive screen",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                )
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
         // Error retry row
@@ -486,22 +505,79 @@ private fun TransferringView(
     progress: Float,
     totalCount: Int,
     completedCount: Int,
+    payloadLabel: SharePayloadDisplayInfo,
     onCancel: () -> Unit
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Spacer(modifier = Modifier.weight(1f))
-        val text = if (totalCount > 1) "Sending ${completedCount + 1} of $totalCount..." else "Sending…"
-        DeviceAvatarButton(
-            endpoint = DiscoveredEndpoint(id = "", name = text),
-            progress = progress,
-            isTransferring = true,
-            onClick = {}
+        val animatedProgress by animateFloatAsState(
+            targetValue = progress,
+            animationSpec = tween(400, easing = LinearOutSlowInEasing),
+            label = "send_progress"
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        
+        Box(
+            modifier = Modifier.size(140.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (payloadLabel.imagePath != null) {
+                coil.compose.AsyncImage(
+                    model = payloadLabel.imagePath,
+                    contentDescription = null,
+                    modifier = Modifier.size(120.dp).clip(CircleShape),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+                // Dark scrim for the percentage text
+                Box(modifier = Modifier.size(120.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)))
+            } else {
+                Box(
+                    modifier = Modifier.size(120.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.size(40.dp))
+                }
+            }
+            
+            androidx.compose.material3.CircularProgressIndicator(
+                progress = { animatedProgress },
+                modifier = Modifier.fillMaxSize(),
+                strokeWidth = 6.dp,
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+            
+            Text(
+                "${(animatedProgress * 100).toInt()}%",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = if (payloadLabel.imagePath != null) Color.White else MaterialTheme.colorScheme.onSurface
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        val text = if (totalCount > 1) "Sending ${completedCount + 1} of $totalCount..." else "Sending…"
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            if (totalCount > 1) "Multiple items" else payloadLabel.title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
         Box(
             modifier = Modifier
                 .clip(CircleShape)
@@ -515,7 +591,6 @@ private fun TransferringView(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
     }
 }
 

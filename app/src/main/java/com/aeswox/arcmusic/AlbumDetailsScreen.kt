@@ -1,5 +1,6 @@
 package com.aeswox.arcmusic
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.aeswox.arcmusic.db.entities.getQualityBadgeResId
 import com.aeswox.arcmusic.ui.components.HugeIcons
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,78 +106,97 @@ fun AlbumDetailsScreen(
     if (album == null) {
         AlbumDetailsSkeleton(onNavigateBack = onNavigateBack)
     } else {
-        LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .physicsBounceOverscroll()
-            .padding(horizontal = 24.dp),
-        contentPadding = PaddingValues(top = 48.dp, bottom = bottomPadding)
-    ) {
-        item {
-            AlbumDetailsHeader(onNavigateBack = onNavigateBack, menuItems = menuItems)
-        }
-        item {
-            AlbumDetailsInfo(
-                album = album,
-                tracks = sortedTracks,
-                onPlay = { viewModel.setCurrentlyPlaying(sortedTracks.firstOrNull(), sortedTracks) },
-                onShuffle = { 
-                    val shuffled = sortedTracks.shuffled()
-                    viewModel.setCurrentlyPlaying(shuffled.firstOrNull(), shuffled) 
-                },
-                onNavigateToArtist = onNavigateToArtist
-            )
-        }
-        item {
-            AlbumTracksList(
-                tracks = sortedTracks,
-                currentlyPlaying = currentlyPlaying,
-                isPlaying = isPlaying,
-                onTrackClick = { track -> viewModel.setCurrentlyPlaying(track, sortedTracks) }
-            )
-        }
-        if (filteredMoreAlbums.isNotEmpty()) {
-            item {
-                Spacer(modifier = Modifier.height(32.dp))
-                MoreByArtistSection(
-                    artistName = album?.artist ?: "",
-                    albums = filteredMoreAlbums,
-                    onNavigateToArtist = onNavigateToArtist,
-                    onNavigateToAlbum = onNavigateToAlbum
-                )
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .physicsBounceOverscroll()
+                    .padding(horizontal = 24.dp),
+                contentPadding = PaddingValues(top = 104.dp, bottom = bottomPadding)
+            ) {
+                item {
+                    AlbumDetailsInfo(
+                        album = album,
+                        tracks = sortedTracks,
+                        onPlay = { viewModel.setCurrentlyPlaying(sortedTracks.firstOrNull(), sortedTracks) },
+                        onShuffle = { 
+                            val shuffled = sortedTracks.shuffled()
+                            viewModel.setCurrentlyPlaying(shuffled.firstOrNull(), shuffled) 
+                        },
+                        onNavigateToArtist = onNavigateToArtist
+                    )
+                }
+                item {
+                    AlbumTracksList(
+                        tracks = sortedTracks,
+                        currentlyPlaying = currentlyPlaying,
+                        isPlaying = isPlaying,
+                        onTrackClick = { track -> viewModel.setCurrentlyPlaying(track, sortedTracks) }
+                    )
+                }
+                if (filteredMoreAlbums.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(32.dp))
+                        MoreByArtistSection(
+                            artistName = album?.artist ?: "",
+                            albums = filteredMoreAlbums,
+                            onNavigateToArtist = onNavigateToArtist,
+                            onNavigateToAlbum = onNavigateToAlbum
+                        )
+                    }
+                }
             }
+            
+            AlbumDetailsHeader(
+                onNavigateBack = onNavigateBack, 
+                menuItems = menuItems,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 48.dp, start = 24.dp, end = 24.dp)
+            )
         }
-    }
     }
 }
 
 @Composable
 fun AlbumDetailsHeader(
     onNavigateBack: () -> Unit,
-    menuItems: List<MorphingMenuItem> = emptyList()
+    menuItems: List<MorphingMenuItem> = emptyList(),
+    modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AppIconButton(
-            icon = HugeIcons.ArrowLeft,
-            contentDescription = "Back",
+        JellyIconButton(
             onClick = onNavigateBack,
-            tint = MaterialTheme.colorScheme.onSurface
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (menuItems.isNotEmpty()) {
-                MorphingMenu(
-                    items = menuItems,
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            } else {
-                AppIconButton(
-                    icon = HugeIcons.MoreVert,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+        ) {
+            Icon(
+                imageVector = HugeIcons.ArrowLeft,
+                contentDescription = "Back",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        if (menuItems.isNotEmpty()) {
+            MorphingMenu(
+                items = menuItems,
+                buttonBackground = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
+                tint = MaterialTheme.colorScheme.onSurface
+            )
+        } else {
+            JellyIconButton(
+                onClick = { },
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+            ) {
+                Icon(
+                    imageVector = HugeIcons.MoreVert,
                     contentDescription = "More",
-                    onClick = { },
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -350,20 +371,36 @@ fun AlbumTracksList(
     onTrackClick: (com.aeswox.arcmusic.db.entities.Track) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val displayTracks = if (expanded || tracks.size <= 6) tracks else tracks.take(5)
+    var displayLimit by remember { androidx.compose.runtime.mutableIntStateOf(5) }
+
+    androidx.compose.runtime.LaunchedEffect(expanded, tracks) {
+        if (expanded) {
+            var current = displayLimit
+            while (current < tracks.size) {
+                current = (current + 20).coerceAtMost(tracks.size)
+                displayLimit = current
+                kotlinx.coroutines.delay(16)
+            }
+        } else {
+            displayLimit = 5
+        }
+    }
+
+    val displayTracks = if (tracks.size <= 6) tracks else tracks.take(displayLimit)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(32.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+            .animateContentSize(androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
             .padding(vertical = 12.dp)
     ) {
         Text(
             text = "TRACKS",
             style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 16.dp)
+            modifier = Modifier.padding(start = 72.dp, end = 24.dp, bottom = 16.dp)
         )
         
         displayTracks.forEachIndexed { index, track ->
@@ -376,6 +413,7 @@ fun AlbumTracksList(
                 number = (index + 1).toString(),
                 title = track.title,
                 duration = durString,
+                qualityBadgeResId = track.getQualityBadgeResId(),
                 isPlaying = isCurrentTrack && isPlaying,
                 isExplicit = false,
                 onClick = { onTrackClick(track) }
@@ -412,6 +450,7 @@ fun AlbumTrackItem(
     number: String,
     title: String,
     duration: String,
+    qualityBadgeResId: Int? = null,
     isPlaying: Boolean = false,
     isExplicit: Boolean = false,
     onClick: () -> Unit = {}
@@ -467,17 +506,21 @@ fun AlbumTrackItem(
                 }
             }
         }
+        Spacer(modifier = Modifier.width(16.dp))
+        if (qualityBadgeResId != null) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = qualityBadgeResId),
+                contentDescription = "Quality",
+                modifier = Modifier.height(16.dp),
+                contentScale = ContentScale.Fit,
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+        }
         Text(
             text = duration,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Icon(
-            imageVector = Icons.Default.Menu,
-            contentDescription = "Options",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-            modifier = Modifier.size(24.dp)
         )
     }
 }

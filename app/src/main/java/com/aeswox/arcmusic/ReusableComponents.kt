@@ -225,11 +225,16 @@ fun AnimatedGlowBackground(modifier: Modifier = Modifier, glowIntensity: Float, 
             modifier = Modifier
                 .align(Alignment.Center)
                 .offset(x = animatedOffsetX.dp, y = animatedOffsetY.dp)
-                .size(600.dp)
+                .size(1000.dp)
+                .graphicsLayer {
+                    scaleX = 1.2f
+                    scaleY = 1.8f
+                }
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
                             animatedColor.copy(alpha = animatedAlpha),
+                            animatedColor.copy(alpha = animatedAlpha * 0.6f),
                             animatedColor.copy(alpha = 0f)
                         )
                     ),

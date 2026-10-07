@@ -94,6 +94,20 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
     private val DEVELOPER_OPTIONS_UNLOCKED_KEY = booleanPreferencesKey("developer_options_unlocked")
     private val AUTO_UPDATE_ENABLED_KEY = booleanPreferencesKey("auto_update_enabled")
+    private val FONT_SCALE_KEY = floatPreferencesKey("font_scale")
+    private val OVERRIDE_FONT_SCALE_ENABLED_KEY = booleanPreferencesKey("override_font_scale_enabled")
+
+    private val IMMERSIVE_MODE_ENABLED_KEY = booleanPreferencesKey("immersive_mode_enabled")
+
+    val immersiveModeEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[IMMERSIVE_MODE_ENABLED_KEY] ?: false
+    }
+
+    suspend fun setImmersiveModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[IMMERSIVE_MODE_ENABLED_KEY] = enabled
+        }
+    }
 
     val appIconVariant: Flow<AppIconVariant> = context.dataStore.data.map { preferences ->
         when (preferences[APP_ICON_VARIANT_KEY]) {
@@ -507,6 +521,26 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setAudioDuckingEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[AUDIO_DUCKING_ENABLED_KEY] = enabled
+        }
+    }
+
+    val fontScale: Flow<Float> = context.dataStore.data.map { preferences ->
+        preferences[FONT_SCALE_KEY] ?: 1.0f
+    }
+
+    suspend fun setFontScale(scale: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[FONT_SCALE_KEY] = scale
+        }
+    }
+
+    val overrideFontScaleEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[OVERRIDE_FONT_SCALE_ENABLED_KEY] ?: false
+    }
+
+    suspend fun setOverrideFontScaleEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[OVERRIDE_FONT_SCALE_ENABLED_KEY] = enabled
         }
     }
 }

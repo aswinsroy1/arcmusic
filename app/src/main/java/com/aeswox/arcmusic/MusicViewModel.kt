@@ -277,6 +277,15 @@ class MusicViewModel @Inject constructor(
     private val _showWelcomeOverlay = MutableStateFlow(false)
     val showWelcomeOverlay: StateFlow<Boolean> = _showWelcomeOverlay.asStateFlow()
     
+    fun setImmersiveModeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setImmersiveModeEnabled(enabled)
+        }
+    }
+
+    val immersiveModeEnabled: StateFlow<Boolean> = settingsRepository.immersiveModeEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     fun setShowWelcomeOverlay(show: Boolean) {
         _showWelcomeOverlay.value = show
     }
@@ -1874,6 +1883,26 @@ class MusicViewModel @Inject constructor(
         SharingStarted.WhileSubscribed(5000),
         ThemeMode.System
     )
+
+    val fontScale: StateFlow<Float> = settingsRepository.fontScale.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        1.0f
+    )
+
+    fun setFontScale(scale: Float) {
+        viewModelScope.launch { settingsRepository.setFontScale(scale) }
+    }
+
+    val overrideFontScaleEnabled: StateFlow<Boolean> = settingsRepository.overrideFontScaleEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        false
+    )
+
+    fun setOverrideFontScaleEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setOverrideFontScaleEnabled(enabled) }
+    }
 
     val tintTransparency: StateFlow<Float> = settingsRepository.tintTransparency.stateIn(
         viewModelScope,

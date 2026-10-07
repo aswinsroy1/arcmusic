@@ -197,7 +197,7 @@ private fun List<SyncedWord>.endMsAt(index: Int): Long {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /** When this line's last word finishes. */
-private fun SyncedLine.lineEndMs(): Long {
+fun SyncedLine.lineEndMs(): Long {
     val ws = words ?: return (time + 500).toLong()
     if (ws.isEmpty()) return (time + 500).toLong()
     return (ws.last().time + 500).toLong()
@@ -865,7 +865,7 @@ internal fun ArcLyricsPanel(
             when {
                 !placed -> { 
                     val centerOffset = listState.layoutInfo.viewportSize.height / 2
-                    listState.scrollToItem(focusLine, scrollOffset = if (isHeroMode) -centerOffset else -halfLineOffsetPx.toInt())
+                    listState.scrollToItem(focusLine, scrollOffset = if (isHeroMode) centerOffset else -halfLineOffsetPx.toInt())
                     placed = true 
                 }
                 visible != null -> {
@@ -882,7 +882,7 @@ internal fun ArcLyricsPanel(
                 }
                 else -> {
                     val centerOffset = listState.layoutInfo.viewportSize.height / 2
-                    listState.animateScrollToItem(focusLine, scrollOffset = if (isHeroMode) -centerOffset else -halfLineOffsetPx.toInt())
+                    listState.animateScrollToItem(focusLine, scrollOffset = if (isHeroMode) centerOffset else -halfLineOffsetPx.toInt())
                 }
             }
         }
@@ -907,8 +907,8 @@ internal fun ArcLyricsPanel(
                 .nestedScroll(keepScroll)
                 .arcFadingEdges(if (isHeroMode) 12.dp else 28.dp),
             contentPadding = if (isHeroMode) PaddingValues(
-                top = containerHeightDp * 0.4f,
-                bottom = containerHeightDp * 0.4f,
+                top = containerHeightDp * 0.5f,
+                bottom = containerHeightDp * 0.5f,
                 start = 8.dp,
                 end = 8.dp,
             ) else PaddingValues(
@@ -949,7 +949,7 @@ internal fun ArcLyricsPanel(
 
             val glowEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
             val glow by animateFloatAsState(
-                targetValue = if (isActive && glowEnabled) GLOW_ALPHA else 0f,
+                targetValue = if (isActive && glowEnabled && !isHeroMode) GLOW_ALPHA else 0f,
                 animationSpec = tween(durationMillis = 420),
                 label = "lyricGlow",
             )
