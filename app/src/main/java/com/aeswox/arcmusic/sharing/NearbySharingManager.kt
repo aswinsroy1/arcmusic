@@ -200,7 +200,9 @@ class NearbySharingManager @Inject constructor(
 
     private val actualPayloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            if (!isInitiator) _isReceiving.value = true
+            // This callback only runs for payloads received from the remote endpoint.
+            // The local device may still have initiated the Nearby connection (NFC tap flow).
+            _isReceiving.value = true
             activePayloads.add(payload.id)
             _sharingState.value = SharingState.TRANSFERRING
             updateTransferService(SharingState.TRANSFERRING, 0f)
