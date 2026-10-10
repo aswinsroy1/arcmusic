@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -100,6 +101,61 @@ class NearbySharingManager @Inject constructor(
 
     private var currentPayload: SharePayload? = null
     private var isInitiator = false
+    @Volatile private var passiveListeningRequested = false
+    @Volatile private var passiveListeningShowsState = false
+    @Volatile private var passiveAdvertising = false
+    @Volatile private var passiveDiscovering = false
+    @Volatile private var passiveSessionStarting = false
+    @Volatile private var pendingEndpointId: String? = null
+    private var passiveRetryJob: kotlinx.coroutines.Job? = null
+
+    /** Keeps Nearby ready for NFC initiated connections while the app is in the foreground. */
+    fun setPassiveListening(enabled: Boolean, showState: Boolean) {
+        passiveListeningRequested = enabled
+        passiveListeningShowsState = showState
+        if (!enabled) {
+            passiveRetryJob?.cancel()
+            passiveRetryJob = null
+            stopAdvertising()
+            stopDiscovery()
+            passiveAdvertising = false
+            passiveDiscovering = false
+            return
+        }
+        ensurePassiveListening()
+    }
+
+    private fun ensurePassiveListening() {
+        if (!passiveListeningRequested || activeEndpointId != null ||
+            _sharingState.value == SharingState.CONNECTED ||
+            _sharingState.value == SharingState.TRANSFERRING ||
+            (passiveListeningShowsState && _sharingState.value == SharingState.COMPLETED)) return
+        if ((passiveAdvertising && passiveDiscovering) || passiveSessionStarting) return
+
+        // Start both sides before waiting for callbacks; a failure in either side retries the pair.
+        isInitiator = false
+        passiveSessionStarting = true
+        startAdvertising(updateState = false)
+        startDiscovery(updateState = false)
+        passiveRetryJob?.cancel()
+        passiveRetryJob = coroutineScope.launch {
+            delay(1_500)
+            if (passiveListeningRequested && (!passiveAdvertising || !passiveDiscovering)) {
+                passiveSessionStarting = false
+                stopAdvertising()
+                stopDiscovery()
+                passiveAdvertising = false
+                passiveDiscovering = false
+                delay(500)
+                ensurePassiveListening()
+            } else {
+                passiveSessionStarting = false
+                if (passiveListeningShowsState && _sharingState.value == SharingState.IDLE) {
+                    _sharingState.value = SharingState.DISCOVERING
+                }
+            }
+        }
+    }
 
     // Store expected metadata by Payload ID (for receiving)
     private val expectedMetadata = mutableMapOf<Long, JSONObject>()
@@ -150,6 +206,7 @@ class NearbySharingManager @Inject constructor(
         _connectionRequest.value = null
         expectedNfcToken = null
         updateTransferService(SharingState.IDLE)
+        ensurePassiveListening()
     }
 
     private val payloadQueue = mutableListOf<com.aeswox.arcmusic.db.entities.Track>()
@@ -173,6 +230,7 @@ class NearbySharingManager @Inject constructor(
             totalFileCount = 0
             completedFileCount = 0
             filePayloadIds.clear()
+            ensurePassiveListening()
             return
         }
         val track = payloadQueue.removeAt(0)
@@ -292,6 +350,7 @@ class NearbySharingManager @Inject constructor(
                             activeEndpointId?.let { connectionsClient.disconnectFromEndpoint(it) }
                             activeEndpointId = null
                             updateTransferService(SharingState.IDLE)
+                            ensurePassiveListening()
                         }
                     }
                 }
@@ -321,6 +380,9 @@ class NearbySharingManager @Inject constructor(
                     _sharingState.value = SharingState.IDLE
                     _isReceiving.value = false
                     updateTransferService(SharingState.IDLE)
+                    activeEndpointId?.let { connectionsClient.disconnectFromEndpoint(it) }
+                    activeEndpointId = null
+                    ensurePassiveListening()
                 }
             }
         }
@@ -331,6 +393,7 @@ class NearbySharingManager @Inject constructor(
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
             if (isInitiator) {
+                _incomingSenderName.value = info.endpointName.substringBefore("|")
                 acceptConnection(endpointId)
             } else {
                 // Sender side logic: Check if the receiver passed back our exact token in their name
@@ -348,8 +411,12 @@ class NearbySharingManager @Inject constructor(
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
+            pendingEndpointId = null
             if (result.status.isSuccess) {
+                activeEndpointId = endpointId
                 _sharingState.value = SharingState.CONNECTED
+                passiveAdvertising = false
+                passiveDiscovering = false
                 stopDiscovery()
                 stopAdvertising()
                 
@@ -358,18 +425,24 @@ class NearbySharingManager @Inject constructor(
                     sendPayloadPackage(endpointId, payload)
                 }
             } else {
+                activeEndpointId = null
                 _sharingState.value = SharingState.ERROR
                 updateTransferService(SharingState.ERROR)
+                ensurePassiveListening()
             }
         }
 
         override fun onDisconnected(endpointId: String) {
+            if (pendingEndpointId == endpointId) pendingEndpointId = null
             if (_sharingState.value != SharingState.COMPLETED) {
                 _sharingState.value = SharingState.IDLE
                 _transferProgress.value = 0f
                 _isReceiving.value = false
                 updateTransferService(SharingState.IDLE)
+                activeEndpointId = null
             }
+            isInitiator = false
+            ensurePassiveListening()
         }
     }
 
@@ -563,56 +636,73 @@ class NearbySharingManager @Inject constructor(
         }
     }
 
-    fun startAdvertising(nfcToken: String? = null) {
+    fun startAdvertising(nfcToken: String? = null, updateState: Boolean = true) {
         isInitiator = false
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
         val nameToAdvertise = if (nfcToken != null) "$userName|$nfcToken" else userName
         connectionsClient.startAdvertising(
             nameToAdvertise, serviceId, connectionLifecycleCallback, advertisingOptions
         ).addOnSuccessListener {
-            _sharingState.value = SharingState.ADVERTISING
+            if (nfcToken == null && !updateState) passiveAdvertising = true
+            if (!updateState && passiveDiscovering) passiveSessionStarting = false
+            if (updateState) _sharingState.value = SharingState.ADVERTISING
         }.addOnFailureListener {
-            _sharingState.value = SharingState.ERROR
+            if (nfcToken == null && !updateState) passiveAdvertising = false
+            if (!updateState) passiveSessionStarting = false
+            if (updateState) _sharingState.value = SharingState.ERROR
             Log.e("NearbySharingManager", "Failed to start advertising", it)
         }
     }
 
     fun stopAdvertising() {
         connectionsClient.stopAdvertising()
+        passiveAdvertising = false
         if (_sharingState.value == SharingState.ADVERTISING) {
             _sharingState.value = SharingState.IDLE
         }
     }
 
-    fun startDiscovery() {
+    fun startDiscovery(updateState: Boolean = true) {
         _discoveredEndpoints.value = emptyList()
         discoveredNfcTokens.clear()
         val discoveryOptions = DiscoveryOptions.Builder().setStrategy(strategy).build()
         connectionsClient.startDiscovery(
             serviceId, endpointDiscoveryCallback, discoveryOptions
         ).addOnSuccessListener {
-            _sharingState.value = SharingState.DISCOVERING
+            if (!updateState) passiveDiscovering = true
+            if (!updateState && passiveAdvertising) passiveSessionStarting = false
+            if (updateState) _sharingState.value = SharingState.DISCOVERING
         }.addOnFailureListener {
-            _sharingState.value = SharingState.ERROR
+            if (!updateState) passiveDiscovering = false
+            if (!updateState) passiveSessionStarting = false
+            if (updateState) _sharingState.value = SharingState.ERROR
             Log.e("NearbySharingManager", "Failed to start discovery", it)
         }
     }
 
     fun stopDiscovery() {
         connectionsClient.stopDiscovery()
+        passiveDiscovering = false
         if (_sharingState.value == SharingState.DISCOVERING) {
             _sharingState.value = SharingState.IDLE
         }
     }
 
     fun requestConnection(endpointId: String) {
+        if (pendingEndpointId == endpointId || activeEndpointId != null ||
+            _sharingState.value == SharingState.CONNECTED || _sharingState.value == SharingState.TRANSFERRING) return
+        pendingEndpointId = endpointId
+        // Stop discovery once the NFC token resolves to a peer; keep advertising for the peer's request.
+        stopDiscovery()
         isInitiator = true
         // If we are connecting via an NFC token, send it back in our name so the sender can auto-accept
         val nameToSend = if (expectedNfcToken != null) "$userName|$expectedNfcToken" else userName
         connectionsClient.requestConnection(nameToSend, endpointId, connectionLifecycleCallback)
             .addOnFailureListener {
+                pendingEndpointId = null
                 _sharingState.value = SharingState.ERROR
                 Log.e("NearbySharingManager", "Failed to request connection", it)
+                ensurePassiveListening()
             }
         expectedNfcToken = null
     }
@@ -632,6 +722,8 @@ class NearbySharingManager @Inject constructor(
         _sharingState.value = SharingState.IDLE
         _transferProgress.value = 0f
         updateTransferService(SharingState.IDLE)
+        activeEndpointId = null
+        ensurePassiveListening()
     }
 
     fun cancelTransfer() {
@@ -649,6 +741,8 @@ class NearbySharingManager @Inject constructor(
         _transferProgress.value = 0f
         _currentTransferTitle.value = null
         updateTransferService(SharingState.IDLE)
+        activeEndpointId = null
+        ensurePassiveListening()
     }
 
 

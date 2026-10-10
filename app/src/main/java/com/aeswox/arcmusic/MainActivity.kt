@@ -170,7 +170,7 @@ class MainActivity : ComponentActivity() {
     private var nearbySessionRequested = false
     private var nearbySessionForegroundOnly = false
     private var nfcReaderActive = false
-    private var nearbySessionActive = false
+    private var sendNearbySessionActive = false
     private var sendScreenActive = false
     private val nfcAdapter by lazy {
         (getSystemService(android.content.Context.NFC_SERVICE) as? android.nfc.NfcManager)?.defaultAdapter
@@ -195,9 +195,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         if (nfcReaderActive) runCatching { nfcAdapter?.disableReaderMode(this) }
-        if (nearbySessionActive) {
+        nearbySharingManager.setPassiveListening(false, showState = false)
+        if (sendNearbySessionActive) {
             nearbySharingManager.stopAdvertising()
             nearbySharingManager.stopDiscovery()
+            sendNearbySessionActive = false
         }
         NfcShareService.currentToken = null
         super.onDestroy()
@@ -211,7 +213,9 @@ class MainActivity : ComponentActivity() {
     ) {
         if (sendScreenActive && !isSendScreen) {
             NfcShareService.currentToken = null
-            if (nearbyRequested) nearbySharingManager.startAdvertising()
+            nearbySharingManager.stopAdvertising()
+            nearbySharingManager.stopDiscovery()
+            sendNearbySessionActive = false
         }
         sendScreenActive = isSendScreen
         nfcReaderRequested = readerRequested
@@ -255,14 +259,27 @@ class MainActivity : ComponentActivity() {
             (!nearbySessionForegroundOnly || activityResumed) &&
             hasPermissions
 
-        if (shouldRunNearby && !nearbySessionActive) {
-            nearbySharingManager.startAdvertising()
-            nearbySharingManager.startDiscovery()
-            nearbySessionActive = true
-        } else if (!shouldRunNearby && nearbySessionActive) {
-            nearbySharingManager.stopAdvertising()
-            nearbySharingManager.stopDiscovery()
-            nearbySessionActive = false
+        if (sendScreenActive) {
+            nearbySharingManager.setPassiveListening(false, showState = false)
+            if (shouldRunNearby && !sendNearbySessionActive) {
+                nearbySharingManager.startAdvertising()
+                nearbySharingManager.startDiscovery()
+                sendNearbySessionActive = true
+            } else if (!shouldRunNearby && sendNearbySessionActive) {
+                nearbySharingManager.stopAdvertising()
+                nearbySharingManager.stopDiscovery()
+                sendNearbySessionActive = false
+            }
+        } else {
+            if (sendNearbySessionActive) {
+                nearbySharingManager.stopAdvertising()
+                nearbySharingManager.stopDiscovery()
+                sendNearbySessionActive = false
+            }
+            nearbySharingManager.setPassiveListening(
+                enabled = shouldRunNearby,
+                showState = shouldRunNearby && !nearbySessionForegroundOnly
+            )
         }
     }
     
