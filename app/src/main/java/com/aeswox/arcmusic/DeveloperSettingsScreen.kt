@@ -24,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -37,6 +38,9 @@ import androidx.compose.material3.Icon
 import com.aeswox.arcmusic.ui.components.JellyIconButton
 
 import com.aeswox.arcmusic.ui.components.CustomHorizontalSlider
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.aeswox.arcmusic.sharing.nearbyConnectionPermissions
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,8 +94,17 @@ fun DeveloperSettingsScreen(
     onFontScaleChange: (Float) -> Unit = {},
     immersiveModeEnabled: Boolean = false,
     onImmersiveModeEnabledChange: (Boolean) -> Unit = {},
+    nfcAlwaysListen: Boolean = false,
+    onNfcAlwaysListenChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val nearbyPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (results.values.all { it }) onNfcAlwaysListenChange(true)
+    }
+
     Scaffold(
         modifier = modifier,
         containerColor = Color.Transparent,
@@ -245,6 +258,49 @@ fun DeveloperSettingsScreen(
                 SliderRow("Thumb Radius (dp)", thumbRadius, onThumbRadiusChange, 0f..15f)
                 SliderRow("Unplayed Stroke (dp)", unplayedStroke, onUnplayedStrokeChange, 1f..10f)
                 SliderRow("Bloom Duration (ms)", bloomDuration, onBloomDurationChange, 100f..2000f)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text(
+                            text = "NFC Listening",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Listen while Arc Music is open, except in Send Music and the full-screen player",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = nfcAlwaysListen,
+                        onCheckedChange = { enabled ->
+                            if (!enabled) {
+                                onNfcAlwaysListenChange(false)
+                            } else {
+                                val permissions = nearbyConnectionPermissions()
+                                val missing = permissions.filter {
+                                    androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context,
+                                        it
+                                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                                }
+                                if (missing.isEmpty()) onNfcAlwaysListenChange(true)
+                                else nearbyPermissionLauncher.launch(missing.toTypedArray())
+                            }
+                        }
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(12.dp))
 

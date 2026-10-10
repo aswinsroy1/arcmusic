@@ -5,6 +5,9 @@ import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -35,6 +38,9 @@ class PlaybackService : MediaSessionService() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var usbDacOutputManager: UsbDacOutputManager
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private var mediaSession: MediaSession? = null
@@ -42,6 +48,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        usbDacOutputManager.register()
         
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -74,7 +81,20 @@ class PlaybackService : MediaSessionService() {
             )
             .build()
             
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink = DefaultAudioSink.Builder(context)
+                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                .build()
+                .also(usbDacOutputManager::attachSink)
+        }
+
         player = ExoPlayer.Builder(this)
+            .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
             .setAudioAttributes(audioAttributes, true)
@@ -121,6 +141,13 @@ class PlaybackService : MediaSessionService() {
                 player.skipSilenceEnabled = enabled
             }
         }
+
+        serviceScope.launch {
+            settingsRepository.usbDacEnabled.collectLatest { enabled ->
+                usbDacOutputManager.setEnabled(enabled)
+                equalizerManager.setOutputDisabledByUsb(enabled)
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -128,6 +155,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        usbDacOutputManager.detachSink()
+        serviceScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         mediaSession?.run {
             player.release()
             release()

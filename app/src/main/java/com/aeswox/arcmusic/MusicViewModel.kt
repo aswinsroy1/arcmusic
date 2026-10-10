@@ -228,7 +228,8 @@ class MusicViewModel @Inject constructor(
     private val mediaScannerManager: com.aeswox.arcmusic.db.MediaScannerManager,
     private val canvasProvider: com.aeswox.arcmusic.network.AppleMusicCanvasProvider,
     val canvasCacheManager: com.aeswox.arcmusic.network.CanvasCacheManager,
-    private val scanLogger: com.aeswox.arcmusic.data.ScanLogger
+    private val scanLogger: com.aeswox.arcmusic.data.ScanLogger,
+    private val usbDacOutputManager: com.aeswox.arcmusic.playback.UsbDacOutputManager
 ) : ViewModel() {
 
     val randomPicks: StateFlow<List<Track>>
@@ -251,6 +252,15 @@ class MusicViewModel @Inject constructor(
 
     val developerOptionsUnlocked: StateFlow<Boolean> = settingsRepository.developerOptionsUnlocked
         .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
+    val nfcAlwaysListen: StateFlow<Boolean> = settingsRepository.nfcAlwaysListen
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setNfcAlwaysListen(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setNfcAlwaysListen(enabled)
+        }
+    }
 
     val autoUpdateEnabled: StateFlow<Boolean> = settingsRepository.autoUpdateEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -2350,6 +2360,21 @@ $catalog"""
     fun setAudioDuckingEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAudioDuckingEnabled(enabled)
+        }
+    }
+
+    val usbDacEnabled: StateFlow<Boolean> = settingsRepository.usbDacEnabled.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), false
+    )
+
+    val usbDacOutputState: StateFlow<com.aeswox.arcmusic.playback.UsbDacOutputManager.State> =
+        usbDacOutputManager.state
+
+    fun setUsbDacEnabled(enabled: Boolean) {
+        usbDacOutputManager.register()
+        usbDacOutputManager.setEnabled(enabled)
+        viewModelScope.launch {
+            settingsRepository.setUsbDacEnabled(enabled)
         }
     }
 

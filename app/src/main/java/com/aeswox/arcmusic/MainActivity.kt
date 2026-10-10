@@ -2,10 +2,14 @@ package com.aeswox.arcmusic
 
 import com.aeswox.arcmusic.sharing.ReceiveScreen
 import com.aeswox.arcmusic.sharing.ShareScreen
+import com.aeswox.arcmusic.sharing.NfcShareService
+import com.aeswox.arcmusic.sharing.NearbySharingManager
+import com.aeswox.arcmusic.sharing.hasNearbyConnectionPermissions
 import com.aeswox.arcmusic.db.entities.getQualityBadgeResId
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
 import com.aeswox.arcmusic.ui.animations.NavTransitions
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.alpha
@@ -157,8 +161,110 @@ val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope
 @kotlin.OptIn(com.google.accompanist.permissions.ExperimentalPermissionsApi::class)
 class MainActivity : ComponentActivity() {
     private val activityViewModel: MusicViewModel by viewModels()
+
+    @Inject
+    lateinit var nearbySharingManager: NearbySharingManager
+
+    private var activityResumed = false
+    private var nfcReaderRequested = false
+    private var nearbySessionRequested = false
+    private var nearbySessionForegroundOnly = false
+    private var nfcReaderActive = false
+    private var nearbySessionActive = false
+    private var sendScreenActive = false
+    private val nfcAdapter by lazy {
+        (getSystemService(android.content.Context.NFC_SERVICE) as? android.nfc.NfcManager)?.defaultAdapter
+    }
+    private val nfcReaderCallback by lazy {
+        NfcShareService.readerCallback(nearbySharingManager::connectViaNfcToken)
+    }
     
     private var keepSplashScreen = true
+
+    override fun onResume() {
+        super.onResume()
+        activityResumed = true
+        syncGlobalNfcListening()
+    }
+
+    override fun onPause() {
+        activityResumed = false
+        syncGlobalNfcListening()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (nfcReaderActive) runCatching { nfcAdapter?.disableReaderMode(this) }
+        if (nearbySessionActive) {
+            nearbySharingManager.stopAdvertising()
+            nearbySharingManager.stopDiscovery()
+        }
+        NfcShareService.currentToken = null
+        super.onDestroy()
+    }
+
+    private fun setNfcListeningPolicy(
+        readerRequested: Boolean,
+        nearbyRequested: Boolean,
+        nearbyForegroundOnly: Boolean,
+        isSendScreen: Boolean
+    ) {
+        if (sendScreenActive && !isSendScreen) {
+            NfcShareService.currentToken = null
+            if (nearbyRequested) nearbySharingManager.startAdvertising()
+        }
+        sendScreenActive = isSendScreen
+        nfcReaderRequested = readerRequested
+        nearbySessionRequested = nearbyRequested
+        nearbySessionForegroundOnly = nearbyForegroundOnly
+        syncGlobalNfcListening()
+    }
+
+    private fun syncGlobalNfcListening() {
+        val adapter = nfcAdapter
+        val hasPermissions = hasNearbyConnectionPermissions()
+        val shouldReadNfc = nfcReaderRequested &&
+            activityResumed &&
+            adapter?.isEnabled == true &&
+            hasPermissions
+
+        if (shouldReadNfc && !nfcReaderActive) {
+            val readerStarted = try {
+                adapter?.enableReaderMode(
+                    this,
+                    nfcReaderCallback,
+                    android.nfc.NfcAdapter.FLAG_READER_NFC_A or
+                        android.nfc.NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
+                    null
+                )
+                true
+            } catch (exception: SecurityException) {
+                android.util.Log.w("MainActivity", "Unable to enable NFC reader mode", exception)
+                false
+            } catch (exception: IllegalStateException) {
+                android.util.Log.w("MainActivity", "NFC reader mode is unavailable", exception)
+                false
+            }
+            nfcReaderActive = readerStarted
+        } else if (!shouldReadNfc && nfcReaderActive) {
+            runCatching { adapter?.disableReaderMode(this) }
+            nfcReaderActive = false
+        }
+
+        val shouldRunNearby = nearbySessionRequested &&
+            (!nearbySessionForegroundOnly || activityResumed) &&
+            hasPermissions
+
+        if (shouldRunNearby && !nearbySessionActive) {
+            nearbySharingManager.startAdvertising()
+            nearbySharingManager.startDiscovery()
+            nearbySessionActive = true
+        } else if (!shouldRunNearby && nearbySessionActive) {
+            nearbySharingManager.stopAdvertising()
+            nearbySharingManager.stopDiscovery()
+            nearbySessionActive = false
+        }
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -353,6 +459,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val isPlayerExpanded by viewModel.isPlayerExpanded.collectAsState()
+                    val nfcAlwaysListen by viewModel.nfcAlwaysListen.collectAsState()
                     val isPlaying by viewModel.isPlaying.collectAsState()
                     val hazeState = remember { HazeState() }
                     val globalNavBarHeight by viewModel.navBarHeight.collectAsState()
@@ -366,6 +473,26 @@ class MainActivity : ComponentActivity() {
                     
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route ?: startDest
+                    val isSendScreen = currentRoute.startsWith("share")
+                    val shouldListenForNfc = if (nfcAlwaysListen) {
+                        !isSendScreen && !isPlayerExpanded
+                    } else {
+                        currentRoute == "receive"
+                    }
+                    val shouldRunNearby = isSendScreen || if (nfcAlwaysListen) {
+                        !isPlayerExpanded
+                    } else {
+                        currentRoute == "receive"
+                    }
+                    val nearbyForegroundOnly = nfcAlwaysListen && !isSendScreen
+                    SideEffect {
+                        setNfcListeningPolicy(
+                            readerRequested = shouldListenForNfc,
+                            nearbyRequested = shouldRunNearby,
+                            nearbyForegroundOnly = nearbyForegroundOnly,
+                            isSendScreen = isSendScreen
+                        )
+                    }
                     val showWelcomeOverlay by viewModel.showWelcomeOverlay.collectAsState()
                     val isNavBarVisible = currentRoute == "home" && !isLibrarySelectionMode && currentTab in 0..2 && selectedGenre == null
 
@@ -877,6 +1004,8 @@ class MainActivity : ComponentActivity() {
                             val skipSilenceEnabled by viewModel.skipSilenceEnabled.collectAsState()
                             val resumeOnBluetoothEnabled by viewModel.resumeOnBluetoothEnabled.collectAsState()
                             val audioDuckingEnabled by viewModel.audioDuckingEnabled.collectAsState()
+                            val usbDacEnabled by viewModel.usbDacEnabled.collectAsState()
+                            val usbDacOutputState by viewModel.usbDacOutputState.collectAsState()
                             
                             val dynamicBottomPadding by remember(isMiniPlayerVisible, currentlyPlaying) {
                                 derivedStateOf {
@@ -903,6 +1032,13 @@ class MainActivity : ComponentActivity() {
                                     onResumeOnBluetoothEnabledChange = { viewModel.setResumeOnBluetoothEnabled(it) },
                                     audioDuckingEnabled = audioDuckingEnabled,
                                     onAudioDuckingEnabledChange = { viewModel.setAudioDuckingEnabled(it) },
+                                    usbDacEnabled = usbDacEnabled,
+                                    onUsbDacEnabledChange = { viewModel.setUsbDacEnabled(it) },
+                                    usbDacStatus = when (usbDacOutputState) {
+                                        com.aeswox.arcmusic.playback.UsbDacOutputManager.State.CONNECTED -> "Connected"
+                                        com.aeswox.arcmusic.playback.UsbDacOutputManager.State.WAITING_FOR_DEVICE -> "Waiting"
+                                        com.aeswox.arcmusic.playback.UsbDacOutputManager.State.DISABLED -> "Waiting"
+                                    },
                                     nowPlayingStyle = nowPlayingStyle,
                                     onNowPlayingStyleChange = { viewModel.setNowPlayingStyle(it) },
                                     lastFmApiKey = lastFmApiKey,
@@ -1027,6 +1163,8 @@ class MainActivity : ComponentActivity() {
                                     onCoilDiskCacheLimitMbChange = { viewModel.setCoilDiskCacheLimitMb(it) },
                                     immersiveModeEnabled = immersiveModeEnabled,
                                     onImmersiveModeEnabledChange = { viewModel.setImmersiveModeEnabled(it) },
+                                    nfcAlwaysListen = nfcAlwaysListen,
+                                    onNfcAlwaysListenChange = { viewModel.setNfcAlwaysListen(it) },
                                     physicsMass = physicsMass,
                                     physicsStiffness = physicsStiffness,
                                     physicsDampingRatio = physicsDampingRatio,
@@ -1144,8 +1282,10 @@ class MainActivity : ComponentActivity() {
                             popEnterTransition = { NavTransitions.SheetPopEnter },
                             popExitTransition = { NavTransitions.SheetPopExit }
                         ) {
+                            val usbDacEnabled by viewModel.usbDacEnabled.collectAsState()
                             EqualizerScreen(
-                                onNavigateBack = { navController.popBackStack() }
+                                onNavigateBack = { navController.popBackStack() },
+                                usbDacEnabled = usbDacEnabled
                             )
                         }
                         composable(

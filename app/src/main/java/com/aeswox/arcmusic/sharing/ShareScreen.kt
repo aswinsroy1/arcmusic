@@ -90,18 +90,6 @@ fun ShareScreen(
         if (!permissionsState.allPermissionsGranted) permissionsState.launchMultiplePermissionRequest()
     }
 
-    DisposableEffect(permissionsState.allPermissionsGranted) {
-        if (permissionsState.allPermissionsGranted) {
-            viewModel.startAdvertising()
-            viewModel.startDiscovery()
-        }
-        onDispose {
-            com.aeswox.arcmusic.sharing.NfcShareService.currentToken = null
-            viewModel.stopAdvertising()
-            viewModel.stopDiscovery()
-        }
-    }
-
     val payloadLabel by viewModel.payloadDisplayLabel.collectAsState(
         initial = SharePayloadDisplayInfo("Preparing to send", "Gathering items...")
     )

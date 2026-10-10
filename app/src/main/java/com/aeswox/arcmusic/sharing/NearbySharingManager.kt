@@ -86,6 +86,12 @@ class NearbySharingManager @Inject constructor(
     private val _currentTransferArtworkB64 = MutableStateFlow<String?>(null)
     val currentTransferArtworkB64: StateFlow<String?> = _currentTransferArtworkB64.asStateFlow()
 
+    private val _isReceiving = MutableStateFlow(false)
+    val isReceiving: StateFlow<Boolean> = _isReceiving.asStateFlow()
+
+    private val _incomingSenderName = MutableStateFlow<String?>(null)
+    val incomingSenderName: StateFlow<String?> = _incomingSenderName.asStateFlow()
+
     private val _discoveredEndpoints = MutableStateFlow<List<DiscoveredEndpoint>>(emptyList())
     val discoveredEndpoints: StateFlow<List<DiscoveredEndpoint>> = _discoveredEndpoints.asStateFlow()
 
@@ -139,6 +145,8 @@ class NearbySharingManager @Inject constructor(
         _completedTransferCount.value = 0
         _currentTransferTitle.value = null
         _currentTransferArtworkB64.value = null
+        _isReceiving.value = false
+        _incomingSenderName.value = null
         _connectionRequest.value = null
         expectedNfcToken = null
         updateTransferService(SharingState.IDLE)
@@ -192,6 +200,7 @@ class NearbySharingManager @Inject constructor(
 
     private val actualPayloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
+            if (!isInitiator) _isReceiving.value = true
             activePayloads.add(payload.id)
             _sharingState.value = SharingState.TRANSFERRING
             updateTransferService(SharingState.TRANSFERRING, 0f)
@@ -277,10 +286,9 @@ class NearbySharingManager @Inject constructor(
                             kotlinx.coroutines.joinAll(*processingJobs.toTypedArray())
                             processingJobs.clear()
                             importMediaUseCase.finalizeImport()
-                            
+                            _sharingState.value = SharingState.COMPLETED
                             activeEndpointId?.let { connectionsClient.disconnectFromEndpoint(it) }
                             activeEndpointId = null
-                            _sharingState.value = SharingState.COMPLETED
                             updateTransferService(SharingState.IDLE)
                         }
                     }
@@ -309,6 +317,7 @@ class NearbySharingManager @Inject constructor(
                 activePayloads.remove(update.payloadId)
                 if (activePayloads.isEmpty()) {
                     _sharingState.value = SharingState.IDLE
+                    _isReceiving.value = false
                     updateTransferService(SharingState.IDLE)
                 }
             }
@@ -325,11 +334,12 @@ class NearbySharingManager @Inject constructor(
                 // Sender side logic: Check if the receiver passed back our exact token in their name
                 val receiverToken = if (info.endpointName.contains("|")) info.endpointName.split("|").getOrNull(1) else null
                 val currentToken = com.aeswox.arcmusic.sharing.NfcShareService.currentToken
-                
+                val cleanName = if (info.endpointName.contains("|")) info.endpointName.substringBefore("|") else info.endpointName
+                _incomingSenderName.value = cleanName
+
                 if (receiverToken != null && currentToken != null && receiverToken == currentToken) {
                     acceptConnection(endpointId) // Seamless tap-to-share!
                 } else {
-                    val cleanName = if (info.endpointName.contains("|")) info.endpointName.substringBefore("|") else info.endpointName
                     _connectionRequest.value = ConnectionRequest(endpointId, cleanName, info.authenticationToken)
                 }
             }
@@ -355,6 +365,7 @@ class NearbySharingManager @Inject constructor(
             if (_sharingState.value != SharingState.COMPLETED) {
                 _sharingState.value = SharingState.IDLE
                 _transferProgress.value = 0f
+                _isReceiving.value = false
                 updateTransferService(SharingState.IDLE)
             }
         }

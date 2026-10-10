@@ -64,12 +64,14 @@ private val FREQ_LABELS = listOf(
 @Composable
 fun EqualizerScreen(
     onNavigateBack: () -> Unit,
+    usbDacEnabled: Boolean = false,
     viewModel: EqualizerViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     val isEnabled by viewModel.isEnabled.collectAsState()
     val bandLevels by viewModel.bandLevels.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val canEditEffects = !usbDacEnabled
 
     val selectedPreset = remember(bandLevels) {
         EQ_PRESETS.firstOrNull { it.levels == bandLevels }?.name
@@ -100,6 +102,7 @@ fun EqualizerScreen(
                     )
                     FilledIconButton(
                         onClick = { viewModel.setEnabled(!isEnabled) },
+                        enabled = canEditEffects,
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = containerColor,
                             contentColor = contentColor
@@ -128,7 +131,7 @@ fun EqualizerScreen(
             // ── Equalizer Sliders Card ──────────────────────
             EqSlidersCard(
                 bandLevels = bandLevels,
-                isEnabled = isEnabled,
+                isEnabled = isEnabled && canEditEffects,
                 onBandChanged = { i, v ->
                     viewModel.setBandLevel(i, v)
                 }
@@ -140,7 +143,7 @@ fun EqualizerScreen(
             PresetsSection(
                 presets = EQ_PRESETS,
                 selectedPreset = selectedPreset,
-                isEnabled = isEnabled,
+                isEnabled = isEnabled && canEditEffects,
                 onPresetSelected = { preset ->
                     viewModel.applyPreset(preset.levels)
                 }
@@ -168,6 +171,7 @@ fun EqualizerScreen(
                     enabled = uiState.bassBoostEnabled,
                     strength = uiState.bassBoostStrength.toFloat(),
                     strengthRange = 0f..1000f,
+                    allowed = canEditEffects,
                     onEnabledChange = { viewModel.setBassBoostEnabled(it) },
                     onStrengthChange = { viewModel.setBassBoostStrength(it.toInt()) }
                 )
@@ -182,6 +186,7 @@ fun EqualizerScreen(
                     enabled = uiState.virtualizerEnabled,
                     strength = uiState.virtualizerStrength.toFloat(),
                     strengthRange = 0f..1000f,
+                    allowed = canEditEffects,
                     onEnabledChange = { viewModel.setVirtualizerEnabled(it) },
                     onStrengthChange = { viewModel.setVirtualizerStrength(it.toInt()) }
                 )
@@ -196,6 +201,7 @@ fun EqualizerScreen(
                     enabled = uiState.loudnessEnabled,
                     strength = uiState.loudnessStrength.toFloat(),
                     strengthRange = 0f..1000f,
+                    allowed = canEditEffects,
                     onEnabledChange = { viewModel.setLoudnessEnabled(it) },
                     onStrengthChange = { viewModel.setLoudnessStrength(it.toInt()) }
                 )
@@ -205,6 +211,7 @@ fun EqualizerScreen(
             // ── Reset Button ─────────────────────────────────
             Spacer(modifier = Modifier.height(12.dp))
             JellyOutlinedButton(
+                enabled = canEditEffects,
                 onClick = {
                     viewModel.applyPreset(EQ_PRESETS.first { it.name == "Flat" }.levels)
                 },
@@ -421,12 +428,13 @@ private fun EffectCard(
     subtitle: String,
     icon: ImageVector,
     enabled: Boolean,
+    allowed: Boolean,
     strength: Float,
     strengthRange: ClosedFloatingPointRange<Float>,
     onEnabledChange: (Boolean) -> Unit,
     onStrengthChange: (Float) -> Unit
 ) {
-    val cardAlpha = if (enabled) 1f else 0.55f
+    val cardAlpha = if (enabled && allowed) 1f else 0.55f
 
     Card(
         modifier = Modifier
@@ -487,6 +495,7 @@ private fun EffectCard(
                 Switch(
                     checked = enabled,
                     onCheckedChange = onEnabledChange,
+                    enabled = allowed,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                         checkedTrackColor = MaterialTheme.colorScheme.primary,
@@ -508,6 +517,7 @@ private fun EffectCard(
                         value = strength,
                         onValueChange = onStrengthChange,
                         valueRange = strengthRange,
+                        enabled = allowed,
                         modifier = Modifier.weight(1f),
                         colors = SliderDefaults.colors(
                             thumbColor = MaterialTheme.colorScheme.primary,

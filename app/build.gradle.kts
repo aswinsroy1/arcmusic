@@ -28,8 +28,8 @@ android {
     applicationId = "com.aeswox.arcmusic"
     minSdk = 31
     targetSdk = 36
-    versionCode = 13
-    versionName = "2.0.1"
+    versionCode = 14
+    versionName = "2.0.3"
     multiDexEnabled = true
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -97,14 +97,9 @@ dependencies {
   implementation(platform(libs.firebase.bom))
   implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
-  // implementation(libs.androidx.camera.camera2)
-  // implementation(libs.androidx.camera.core)
-  // implementation(libs.androidx.camera.lifecycle)
-  // implementation(libs.androidx.camera.view)
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
-  implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.ui)
   implementation("androidx.compose.foundation:foundation")
   implementation(libs.androidx.compose.ui.graphics)
@@ -127,23 +122,12 @@ dependencies {
   implementation(libs.haze)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
-  // Uncomment to use Firestore:
-  // implementation(libs.firebase.firestore)
-
-  // Firebase Auth with Google Sign-In requires all of the following to be uncommented together.
-  // If you are using Firebase Auth with other providers (e.g. Email/Password), you may only need
-  // firebase-auth.
-  // implementation(libs.firebase.auth)
-  // implementation(libs.androidx.credentials)
-  // implementation(libs.androidx.credentials.play.services)
-  // implementation(libs.googleid)
   implementation(libs.firebase.appcheck.recaptcha)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   implementation(libs.androidx.media3.common)
   implementation(libs.androidx.media3.ui)

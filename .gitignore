@@ -29,3 +29,9 @@ app/build/
 /*.py
 /*.sh
 node_modules
+
+# Local build diagnostics and signing material
+*.log
+*.jks*
+keystore*.txt
+app/crash_log.txt

@@ -90,9 +90,11 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     private val SKIP_SILENCE_ENABLED_KEY = booleanPreferencesKey("skip_silence_enabled")
     private val RESUME_ON_BLUETOOTH_ENABLED_KEY = booleanPreferencesKey("resume_on_bluetooth_enabled")
     private val AUDIO_DUCKING_ENABLED_KEY = booleanPreferencesKey("audio_ducking_enabled")
+    private val USB_DAC_ENABLED_KEY = booleanPreferencesKey("usb_dac_enabled")
     private val APP_ICON_VARIANT_KEY = stringPreferencesKey("app_icon_variant")
     private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
     private val DEVELOPER_OPTIONS_UNLOCKED_KEY = booleanPreferencesKey("developer_options_unlocked")
+    private val NFC_ALWAYS_LISTEN_KEY = booleanPreferencesKey("nfc_always_listen")
     private val AUTO_UPDATE_ENABLED_KEY = booleanPreferencesKey("auto_update_enabled")
     private val FONT_SCALE_KEY = floatPreferencesKey("font_scale")
     private val OVERRIDE_FONT_SCALE_ENABLED_KEY = booleanPreferencesKey("override_font_scale_enabled")
@@ -169,6 +171,16 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     
     val developerOptionsUnlocked: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[DEVELOPER_OPTIONS_UNLOCKED_KEY] ?: false
+    }
+
+    val nfcAlwaysListen: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[NFC_ALWAYS_LISTEN_KEY] ?: false
+    }
+
+    suspend fun setNfcAlwaysListen(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[NFC_ALWAYS_LISTEN_KEY] = enabled
+        }
     }
 
     val canvasCacheLimitMb: Flow<Int> = context.dataStore.data.map { preferences ->
@@ -500,6 +512,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         preferences[AUDIO_DUCKING_ENABLED_KEY] ?: true
     }
 
+    val usbDacEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[USB_DAC_ENABLED_KEY] ?: false
+    }
+
     suspend fun setAutoplayEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[AUTOPLAY_ENABLED_KEY] = enabled
@@ -521,6 +537,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     suspend fun setAudioDuckingEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[AUDIO_DUCKING_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setUsbDacEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[USB_DAC_ENABLED_KEY] = enabled
         }
     }
 

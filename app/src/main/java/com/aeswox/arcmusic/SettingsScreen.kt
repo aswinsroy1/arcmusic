@@ -58,6 +58,9 @@ fun SettingsScreen(
     onResumeOnBluetoothEnabledChange: (Boolean) -> Unit,
     audioDuckingEnabled: Boolean = true,
     onAudioDuckingEnabledChange: (Boolean) -> Unit,
+    usbDacEnabled: Boolean = false,
+    onUsbDacEnabledChange: (Boolean) -> Unit = {},
+    usbDacStatus: String = "",
     onNowPlayingStyleChange: (NowPlayingStyle) -> Unit,
     onLastFmApiKeyChange: (String) -> Unit,
     onFanartTvApiKeyChange: (String) -> Unit,
@@ -250,7 +253,24 @@ fun SettingsScreen(
                 
                 item {
                     SettingsGroup(title = "PLAYBACK") {
-                        SettingsItem(icon = Icons.Outlined.Tune, text = "Equalizer", onClick = onNavigateToEqualizer)
+                        SettingsItem(
+                            icon = Icons.Outlined.Tune,
+                            text = "Equalizer",
+                            enabled = !usbDacEnabled,
+                            onClick = onNavigateToEqualizer
+                        )
+                        SettingsItem(
+                            icon = Icons.Outlined.Headphones,
+                            text = "USB DAC",
+                            trailingText = usbDacStatus.takeIf { usbDacEnabled },
+                            trailingContent = {
+                                Switch(
+                                    checked = usbDacEnabled,
+                                    onCheckedChange = onUsbDacEnabledChange
+                                )
+                            },
+                            showArrow = false
+                        )
                         SettingsItem(
                             icon = HugeIcons.Autoplay,
                             text = "Auto-play",

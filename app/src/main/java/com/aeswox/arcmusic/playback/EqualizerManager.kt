@@ -36,6 +36,7 @@ class EqualizerManager @Inject constructor(
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var outputDisabledByUsb = false
 
     private var currentAudioSessionId: Int = 0
 
@@ -111,7 +112,7 @@ class EqualizerManager @Inject constructor(
             equalizer = Equalizer(0, audioSessionId).apply {
                 minEqLevel = bandLevelRange[0]
                 maxEqLevel = bandLevelRange[1]
-                enabled = _isEnabled.value
+                enabled = _isEnabled.value && !outputDisabledByUsb
             }
             currentAudioSessionId = audioSessionId
             Log.d(TAG, "EQ attached to session $audioSessionId – range: $minEqLevel to $maxEqLevel mB")
@@ -122,7 +123,7 @@ class EqualizerManager @Inject constructor(
                 try {
                     bassBoost = BassBoost(0, audioSessionId).apply {
                         if (strengthSupported) setStrength(_bassBoostStrength.value.toShort())
-                        enabled = _bassBoostEnabled.value
+                        enabled = _bassBoostEnabled.value && !outputDisabledByUsb
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "BassBoost unavailable: ${e.message}")
@@ -134,7 +135,7 @@ class EqualizerManager @Inject constructor(
                 try {
                     virtualizer = Virtualizer(0, audioSessionId).apply {
                         if (strengthSupported) setStrength(_virtualizerStrength.value.toShort())
-                        enabled = _virtualizerEnabled.value
+                        enabled = _virtualizerEnabled.value && !outputDisabledByUsb
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Virtualizer unavailable: ${e.message}")
@@ -145,7 +146,7 @@ class EqualizerManager @Inject constructor(
             try {
                 loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
                     setTargetGain(_loudnessStrength.value.coerceIn(0, MAX_LOUDNESS_GAIN_MB))
-                    enabled = _loudnessEnabled.value
+                    enabled = _loudnessEnabled.value && !outputDisabledByUsb
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "LoudnessEnhancer unavailable: ${e.message}")
@@ -163,10 +164,24 @@ class EqualizerManager @Inject constructor(
         _isEnabled.value = enabled
         prefs.edit().putBoolean("eq_enabled", enabled).apply()
         try {
-            equalizer?.enabled = enabled
+            equalizer?.enabled = enabled && !outputDisabledByUsb
             if (enabled) applyBandLevels(_bandLevels.value)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set EQ enabled state", e)
+        }
+    }
+
+    /** Temporarily suspends app effects while USB DAC routing is selected, without changing preferences. */
+    fun setOutputDisabledByUsb(disabled: Boolean) {
+        if (outputDisabledByUsb == disabled) return
+        outputDisabledByUsb = disabled
+        try {
+            equalizer?.enabled = _isEnabled.value && !disabled
+            bassBoost?.enabled = _bassBoostEnabled.value && !disabled
+            virtualizer?.enabled = _virtualizerEnabled.value && !disabled
+            loudnessEnhancer?.enabled = _loudnessEnabled.value && !disabled
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update audio effects for USB output", e)
         }
     }
 
@@ -242,7 +257,7 @@ class EqualizerManager @Inject constructor(
         if (!isBassBoostSupportedGlobal) return
         _bassBoostEnabled.value = enabled
         prefs.edit().putBoolean("bb_enabled", enabled).apply()
-        try { bassBoost?.enabled = enabled }
+        try { bassBoost?.enabled = enabled && !outputDisabledByUsb }
         catch (e: Exception) { Log.e(TAG, "Failed to set BassBoost enabled", e) }
     }
 
@@ -262,7 +277,7 @@ class EqualizerManager @Inject constructor(
         if (!isVirtualizerSupportedGlobal) return
         _virtualizerEnabled.value = enabled
         prefs.edit().putBoolean("virt_enabled", enabled).apply()
-        try { virtualizer?.enabled = enabled }
+        try { virtualizer?.enabled = enabled && !outputDisabledByUsb }
         catch (e: Exception) { Log.e(TAG, "Failed to set Virtualizer enabled", e) }
     }
 
@@ -281,7 +296,7 @@ class EqualizerManager @Inject constructor(
     fun setLoudnessEnabled(enabled: Boolean) {
         _loudnessEnabled.value = enabled
         prefs.edit().putBoolean("loudness_enabled", enabled).apply()
-        try { loudnessEnhancer?.enabled = enabled }
+        try { loudnessEnhancer?.enabled = enabled && !outputDisabledByUsb }
         catch (e: Exception) { Log.e(TAG, "Failed to set LoudnessEnhancer enabled", e) }
     }
 
