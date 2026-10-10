@@ -53,14 +53,26 @@ fun AlbumDetailsScreen(
     val hasMiniPlayer = isMiniPlayerVisible && currentlyPlaying != null
 
     val immersiveMode by viewModel.immersiveModeEnabled.collectAsState()
+    val isDark = isDarkTheme()
     val rawImmersiveColor by rememberDominantColor(album?.artworkUri, Color(0xFF211F26))
-    val immersiveColor = remember(rawImmersiveColor) { immersiveBackground(rawImmersiveColor) }
-    val immersiveAccent by rememberVibrantColor(album?.artworkUri, MaterialTheme.colorScheme.secondary, immersiveColor)
+    val immersiveColor = remember(rawImmersiveColor, isDark) { immersiveBackground(rawImmersiveColor, isDark) }
+    val baseAccent by rememberVibrantColor(album?.artworkUri, MaterialTheme.colorScheme.secondary, immersiveColor)
+    val immersiveAccent = remember(baseAccent, isDark) { darkenTowardBlack(baseAccent, isDark, threshold = 0.60f, maxMix = 0.40f) }
     LaunchedEffect(immersiveMode, immersiveColor) {
         viewModel.setImmersiveScrimColor(if (immersiveMode) immersiveColor else null)
     }
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val headerCollapsed = rememberImmersiveHeaderSnap(
+        listState = listState,
+        headerRowCenter = topInset + 36.dp,
+        enabled = immersiveMode
+    )
+    val actionsVisible = rememberImmersiveHeaderActionsVisible(
+        listState = listState,
+        enabled = immersiveMode
+    )
 
     val bottomPadding by androidx.compose.animation.core.animateDpAsState(
         targetValue = if (hasMiniPlayer) 130.dp else 48.dp,
@@ -127,7 +139,22 @@ fun AlbumDetailsScreen(
                     else Modifier.systemBarsPadding()
                 )
         ) {
+            if (immersiveMode) {
+                ImmersiveArtworkBackdrop(
+                    listState = listState,
+                    immersiveColor = immersiveColor,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                ) {
+                    AsyncImage(
+                        model = album?.artworkUri,
+                        contentDescription = "Album Cover",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .physicsBounceOverscroll()
@@ -140,23 +167,6 @@ fun AlbumDetailsScreen(
                 if (immersiveMode) {
                     item {
                         Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
-                            AsyncImage(
-                                model = album?.artworkUri,
-                                contentDescription = "Album Cover",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(260.dp)
-                                    .align(Alignment.BottomCenter)
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(immersiveColor.copy(alpha = 0f), immersiveColor)
-                                        )
-                                    )
-                            )
                             Column(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
@@ -172,6 +182,11 @@ fun AlbumDetailsScreen(
                                     fontSize = 40.sp,
                                     lineHeight = 46.sp,
                                     maxLines = 1,
+                                    modifier = Modifier.jellyClick(
+                                        enabled = headerCollapsed,
+                                        onClickLabel = "Go back",
+                                        onClick = onNavigateBack
+                                    ),
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
@@ -240,8 +255,8 @@ fun AlbumDetailsScreen(
                 }
                 if (filteredMoreAlbums.isNotEmpty()) {
                     item {
-                        Box(modifier = if (immersiveMode) Modifier.padding(horizontal = 24.dp) else Modifier) {
-                            Spacer(modifier = Modifier.height(32.dp))
+                        Column(modifier = if (immersiveMode) Modifier.padding(horizontal = 24.dp) else Modifier) {
+                            Spacer(modifier = Modifier.height(24.dp))
                             MoreByArtistSection(
                                 artistName = album?.artist ?: "",
                                 albums = filteredMoreAlbums,
@@ -254,11 +269,21 @@ fun AlbumDetailsScreen(
                 }
             }
             
+            if (immersiveMode) {
+                ImmersiveTopScrim(
+                    listState = listState,
+                    color = immersiveColor,
+                    height = topInset + 20.dp,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
+
             AlbumDetailsHeader(
                 onNavigateBack = onNavigateBack, 
                 menuItems = menuItems,
                 immersive = immersiveMode,
                 accent = immersiveAccent,
+                actionsVisible = actionsVisible,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = if (immersiveMode) topInset + 16.dp else 48.dp, start = 24.dp, end = 24.dp)
@@ -273,6 +298,7 @@ fun AlbumDetailsHeader(
     menuItems: List<MorphingMenuItem> = emptyList(),
     immersive: Boolean = false,
     accent: Color = Color.White,
+    actionsVisible: Boolean = true,
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     Row(
@@ -280,38 +306,42 @@ fun AlbumDetailsHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        JellyIconButton(
-            onClick = onNavigateBack,
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
-        ) {
-            Icon(
-                imageVector = HugeIcons.ArrowLeft,
-                contentDescription = "Back",
-                tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
-            )
-        }
-        if (menuItems.isNotEmpty()) {
-            MorphingMenu(
-                items = menuItems,
-                buttonBackground = if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
-                tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface,
-                immersive = immersive,
-                immersiveAccent = accent
-            )
-        } else {
+        ImmersiveActionVisibility(visible = actionsVisible, slideLeft = true) {
             JellyIconButton(
-                onClick = { },
+                onClick = onNavigateBack,
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
             ) {
                 Icon(
-                    imageVector = HugeIcons.MoreVert,
-                    contentDescription = "More",
+                    imageVector = HugeIcons.ArrowLeft,
+                    contentDescription = "Back",
                     tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+        ImmersiveActionVisibility(visible = actionsVisible) {
+            if (menuItems.isNotEmpty()) {
+                MorphingMenu(
+                    items = menuItems,
+                    buttonBackground = if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
+                    tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface,
+                    immersive = immersive,
+                    immersiveAccent = accent
+                )
+            } else {
+                JellyIconButton(
+                    onClick = { },
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.MoreVert,
+                        contentDescription = "More",
+                        tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }
@@ -353,11 +383,6 @@ fun AlbumDetailsInfo(
                     color = Color.White.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.7f)
                 )
             }
             if (subtitleText.isNotBlank()) {
@@ -413,11 +438,6 @@ fun AlbumDetailsInfo(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Text(

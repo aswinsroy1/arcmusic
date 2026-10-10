@@ -233,7 +233,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay(2000)
                 if (viewModel.autoUpdateEnabled.value) {
-                    val result = updateManager.checkForUpdates("aswinsroy1", "arcmusic")
+                    val result = updateManager.checkForUpdates()
                     if (result is com.aeswox.arcmusic.updater.UpdateResult.UpdateAvailable) {
                         updateResult = result
                     }
@@ -488,11 +488,11 @@ class MainActivity : ComponentActivity() {
                                                      onNavigateToQueue = {}, // Handled in-screen
                                                     onNavigateToAlbum = { albumId -> 
                                                         viewModel.setPlayerExpanded(false)
-                                                        navController.navigate("album_details/$albumId") 
+                                                        navController.navigate("album_details/${android.net.Uri.encode(albumId)}") 
                                                     },
                                                     onNavigateToArtist = { artistId -> 
                                                         viewModel.setPlayerExpanded(false)
-                                                        navController.navigate("artist_details/$artistId") 
+                                                        navController.navigate("artist_details/${android.net.Uri.encode(artistId)}") 
                                                     },
                                                     onNavigateToShare = { type, id ->
                                                         viewModel.setPlayerExpanded(false)
@@ -587,9 +587,9 @@ class MainActivity : ComponentActivity() {
                                         noiseFactor = noiseFactor,
                                         glowIntensity = glowIntensity,
                                         onNavigateToSettings = { navController.navigate("settings") },
-                                        onNavigateToAlbumDetails = { albumId -> navController.navigate("album_details/$albumId") },
-                                        onNavigateToPlaylistDetails = { playlistId -> navController.navigate("playlist_details/$playlistId") },
-                                        onNavigateToArtistDetails = { artistId -> navController.navigate("artist_details/$artistId") },
+                                        onNavigateToAlbumDetails = { albumId -> navController.navigate("album_details/${android.net.Uri.encode(albumId)}") },
+                                        onNavigateToPlaylistDetails = { playlistId -> navController.navigate("playlist_details/${android.net.Uri.encode(playlistId)}") },
+                                        onNavigateToArtistDetails = { artistId -> navController.navigate("artist_details/${android.net.Uri.encode(artistId)}") },
                                         onNavigateToShare = { type, id -> navController.navigate("share?type=$type&id=$id") },
                                          onNavigateToQueue = {}, // Queue is now in-screen inside now playing
                                         onNavigateToEditMetadata = { trackId -> navController.navigate("edit_metadata/$trackId?readOnly=true") },
@@ -769,14 +769,14 @@ class MainActivity : ComponentActivity() {
                             popEnterTransition = { NavTransitions.DetailPopEnter },
                             popExitTransition = { NavTransitions.DetailPopExit }
                         ) { backStackEntry ->
-                            val artistId = backStackEntry.arguments?.getString("artistId") ?: return@composable
+                            val artistId = android.net.Uri.decode(backStackEntry.arguments?.getString("artistId") ?: return@composable)
                             Box(modifier = Modifier.fillMaxSize()) {
                                 ArtistDetailsScreen(
                                     artistId = artistId,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onNavigateToAlbum = { albumId -> navController.navigate("album_details/$albumId") },
-                                    onNavigateToAllTracks = { aId -> navController.navigate("artist_tracks/$aId") },
-                                    onNavigateToAllAlbums = { aId -> navController.navigate("artist_albums/$aId") },
+                                    onNavigateToAlbum = { albumId -> navController.navigate("album_details/${android.net.Uri.encode(albumId)}") },
+                                    onNavigateToAllTracks = { aId -> navController.navigate("artist_tracks/${android.net.Uri.encode(aId)}") },
+                                    onNavigateToAllAlbums = { aId -> navController.navigate("artist_albums/${android.net.Uri.encode(aId)}") },
                                     onNavigateToShare = { type, id -> navController.navigate("share?type=$type&id=$id") },
                                     viewModel = viewModel
                                 )
@@ -789,7 +789,7 @@ class MainActivity : ComponentActivity() {
                             popEnterTransition = { NavTransitions.DetailPopEnter },
                             popExitTransition = { NavTransitions.DetailPopExit }
                         ) { backStackEntry ->
-                            val artistId = backStackEntry.arguments?.getString("artistId") ?: return@composable
+                            val artistId = android.net.Uri.decode(backStackEntry.arguments?.getString("artistId") ?: return@composable)
                             Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                                 ArtistTracksScreen(
                                     artistId = artistId,
@@ -805,12 +805,12 @@ class MainActivity : ComponentActivity() {
                             popEnterTransition = { NavTransitions.DetailPopEnter },
                             popExitTransition = { NavTransitions.DetailPopExit }
                         ) { backStackEntry ->
-                            val artistId = backStackEntry.arguments?.getString("artistId") ?: return@composable
+                            val artistId = android.net.Uri.decode(backStackEntry.arguments?.getString("artistId") ?: return@composable)
                             Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                                 ArtistAlbumsScreen(
                                     artistId = artistId,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onNavigateToAlbum = { albumId -> navController.navigate("album_details/$albumId") },
+                                    onNavigateToAlbum = { albumId -> navController.navigate("album_details/${android.net.Uri.encode(albumId)}") },
                                     viewModel = viewModel
                                 )
                             }
@@ -822,13 +822,13 @@ class MainActivity : ComponentActivity() {
                             popEnterTransition = { NavTransitions.DetailPopEnter },
                             popExitTransition = { NavTransitions.DetailPopExit }
                         ) { backStackEntry ->
-                            val albumId = backStackEntry.arguments?.getString("albumId") ?: return@composable
+                            val albumId = android.net.Uri.decode(backStackEntry.arguments?.getString("albumId") ?: return@composable)
                             Box(modifier = Modifier.fillMaxSize()) {
                                 AlbumDetailsScreen(
                                     albumId = albumId,
                                     onNavigateBack = { navController.popBackStack() },
-                                    onNavigateToArtist = { aId -> navController.navigate("artist_details/$aId") },
-                                    onNavigateToAlbum = { aId -> navController.navigate("album_details/$aId") },
+                                    onNavigateToArtist = { aId -> navController.navigate("artist_details/${android.net.Uri.encode(aId)}") },
+                                    onNavigateToAlbum = { aId -> navController.navigate("album_details/${android.net.Uri.encode(aId)}") },
                                     onNavigateToShare = { type, id -> navController.navigate("share?type=$type&id=$id") },
                                     viewModel = viewModel
                                 )
@@ -841,7 +841,7 @@ class MainActivity : ComponentActivity() {
                             popEnterTransition = { NavTransitions.DetailPopEnter },
                             popExitTransition = { NavTransitions.DetailPopExit }
                         ) { backStackEntry ->
-                            val playlistId = backStackEntry.arguments?.getString("playlistId") ?: return@composable
+                            val playlistId = android.net.Uri.decode(backStackEntry.arguments?.getString("playlistId") ?: return@composable)
                             Box(modifier = Modifier.fillMaxSize()) {
                                 PlaylistDetailsScreen(
                                     playlistId = playlistId,
@@ -949,7 +949,7 @@ class MainActivity : ComponentActivity() {
                                     onCheckForUpdates = {
                                         updateResult = com.aeswox.arcmusic.updater.UpdateResult.Checking
                                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                                            val result = updateManager.checkForUpdates("aswinsroy1", "arcmusic")
+                                            val result = updateManager.checkForUpdates()
                                             updateResult = result
                                         }
                                     }
@@ -1405,6 +1405,9 @@ class MainActivity : ComponentActivity() {
                                 downloadState = com.aeswox.arcmusic.updater.DownloadState.ReadyToInstall
                             }
                         )
+                    },
+                    onInstallClick = {
+                        updateManager.installDownloadedUpdate()
                     }
                 )
             }

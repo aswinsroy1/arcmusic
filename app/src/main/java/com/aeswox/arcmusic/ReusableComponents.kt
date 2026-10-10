@@ -72,6 +72,11 @@ import androidx.compose.ui.composed
 import androidx.compose.foundation.shape.CornerBasedShape
 
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import com.aeswox.arcmusic.ui.animations.JigglePhysicsSettings
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlin.math.abs
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -228,14 +233,31 @@ fun Color.contrastingShade(): Color {
     return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
-fun immersiveBackground(color: Color): Color {
+fun immersiveBackground(color: Color, isDark: Boolean = false): Color {
     val luminance = 0.2126f * color.red + 0.7152f * color.green + 0.0722f * color.blue
-    if (luminance <= 0.55f) return color
-    val hsl = FloatArray(3)
-    rgbToHsl(color.red, color.green, color.blue, hsl)
-    hsl[2] = minOf(hsl[2], 0.40f)
-    return hslToColor(hsl[0], hsl[1], hsl[2])
+    val base = if (luminance <= 0.55f) color else {
+        val hsl = FloatArray(3)
+        rgbToHsl(color.red, color.green, color.blue, hsl)
+        hsl[2] = minOf(hsl[2], 0.40f)
+        hslToColor(hsl[0], hsl[1], hsl[2])
+    }
+    return darkenTowardBlack(base, isDark, threshold = 0.30f, maxMix = 0.50f)
 }
+
+// Dark mode only: nudge overly bright immersive colors toward black so immersive pages, their
+// accent buttons, and the dropdown stay readable on a dark screen. No-op in light mode or when
+// the color is already dark enough (luminance <= threshold); mix scales from 0 at the threshold
+// up to maxMix at pure white, so mildly-bright colors are barely touched and glaring ones cut more.
+fun darkenTowardBlack(color: Color, isDark: Boolean, threshold: Float, maxMix: Float): Color {
+    if (!isDark) return color
+    val luminance = 0.2126f * color.red + 0.7152f * color.green + 0.0722f * color.blue
+    if (luminance <= threshold) return color
+    val t = ((luminance - threshold) / (1f - threshold)).coerceIn(0f, 1f)
+    return lerp(color, Color.Black, t * maxMix)
+}
+
+@Composable
+fun isDarkTheme(): Boolean = MaterialTheme.colorScheme.background.luminance() < 0.05f
 
 private fun rgbToHsl(r: Float, g: Float, b: Float, out: FloatArray) {
     val max = maxOf(r, g, b)
@@ -290,6 +312,353 @@ fun immersiveTextColor(immersive: Boolean): Color =
 fun immersiveMutedColor(immersive: Boolean): Color =
     if (immersive) Color.White.copy(alpha = 0.6f)
     else MaterialTheme.colorScheme.onSurfaceVariant
+
+/**
+ * How far above the bottom of the hero item the artwork finishes fading: the
+ * title and buttons hang at the very bottom of it, so the title reaches the
+ * top of the screen this far before the hero is scrolled off.
+ */
+private val ImmersiveHeaderEndReserve = 210.dp
+
+/**
+ * Distance from the hero item's bottom edge up to the vertical centre of the
+ * title: the title block starts 90dp above that edge and the title line itself
+ * is 46dp tall. The snap parks the hero's bottom this far below the header
+ * row's centre, which puts the title on the same line as the buttons.
+ */
+private val ImmersiveTitleCenterFromHeroBottom = 67.dp
+
+private fun immersiveHeroHeight(
+    listState: androidx.compose.foundation.lazy.LazyListState
+): Float = listState.layoutInfo.visibleItemsInfo
+    .firstOrNull { it.index == 0 }?.size?.toFloat() ?: 0f
+
+/**
+ * How far the hero has been scrolled off the top. Reports as past everything
+ * once the hero itself is gone, so callers never mistake a scrolled-away hero
+ * for an untouched one.
+ */
+private fun immersiveHeroOffset(
+    listState: androidx.compose.foundation.lazy.LazyListState
+): Float = if (listState.firstVisibleItemIndex == 0) {
+    listState.firstVisibleItemScrollOffset.toFloat()
+} else {
+    Float.MAX_VALUE
+}
+
+private fun immersiveSnapOffsetPx(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    reservePx: Float
+): Float = (immersiveHeroHeight(listState) - reservePx).coerceAtLeast(0f)
+
+/**
+ * Scroll-driven state for an immersive detail header. [ImmersiveHeaderState.collapse]
+ * runs 0f → 1f and hits 1f when the title block reaches the top of the screen.
+ * [ImmersiveHeaderState.scrollOffsetPx] is the raw hero scroll in pixels. Both
+ * are derived straight from the LazyListState, so there is no new animation
+ * spec, and jelly overscroll leaves them untouched because that effect is
+ * visual-only.
+ */
+data class ImmersiveHeaderState(
+    val collapse: Float,
+    val scrollOffsetPx: Float
+)
+
+@Composable
+fun rememberImmersiveHeaderState(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    endReserve: androidx.compose.ui.unit.Dp = ImmersiveHeaderEndReserve
+): ImmersiveHeaderState {
+    val reservePx = with(LocalDensity.current) { endReserve.toPx() }
+    return derivedStateOf {
+        val heroHeight = immersiveHeroHeight(listState)
+        if (listState.firstVisibleItemIndex > 0 || heroHeight <= 0f) {
+            ImmersiveHeaderState(collapse = 1f, scrollOffsetPx = heroHeight)
+        } else {
+            val offset = listState.firstVisibleItemScrollOffset.toFloat().coerceIn(0f, heroHeight)
+            val travel = heroHeight - reservePx
+            ImmersiveHeaderState(
+                collapse = if (travel <= 0f) 0f else (offset / travel).coerceIn(0f, 1f),
+                scrollOffsetPx = offset
+            )
+        }
+    }.value
+}
+
+/**
+ * Magnetic detent for an immersive detail header. When a scroll comes to rest
+ * within [captureRadius] of the point where the title's centre lines up with
+ * [headerRowCenter] — the vertical centre of the back / more button row — the
+ * list is pulled the last few pixels onto that point and a light haptic tick
+ * fires. A fling that blows past the point is left alone, and the pull uses
+ * the same damped oscillator family as the jelly overscroll rather than a
+ * Material spec. The magnet disarms after each catch until the list has moved
+ * [reArmDistance] clear, so nudging around the point never re-glues it.
+ *
+ * Returns true from the moment the title reaches that line and stays true for
+ * the rest of the page, clearing only once the list travels back up past it.
+ * While it is true the title itself answers taps as "go back", which is what
+ * keeps the page escapable after [rememberImmersiveHeaderActionsVisible] has
+ * retired the button row.
+ */
+@Composable
+fun rememberImmersiveHeaderSnap(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    headerRowCenter: androidx.compose.ui.unit.Dp,
+    enabled: Boolean = true,
+    captureRadius: androidx.compose.ui.unit.Dp = 48.dp,
+    reArmDistance: androidx.compose.ui.unit.Dp = 90.dp
+): Boolean {
+    val reservePx = with(LocalDensity.current) {
+        (headerRowCenter + ImmersiveTitleCenterFromHeroBottom).toPx()
+    }
+    val capturePx = with(LocalDensity.current) { captureRadius.toPx() }
+    val reArmPx = with(LocalDensity.current) { reArmDistance.toPx() }
+    val physics = LocalJigglePhysicsSettings.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+
+    var armed by remember { mutableStateOf(true) }
+    // Our own pull-in also reports isScrollInProgress, so the handler needs to
+    // know when the scroll it is seeing belongs to us.
+    val snapping = remember { BooleanArray(1) }
+
+    LaunchedEffect(listState, enabled, reservePx, capturePx) {
+        if (!enabled) {
+            armed = true
+            return@LaunchedEffect
+        }
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { inProgress ->
+                if (inProgress || snapping[0]) return@collect
+
+                val target = immersiveSnapOffsetPx(listState, reservePx)
+                val offset = immersiveHeroOffset(listState)
+                if (!armed || target <= 0f || abs(offset - target) > capturePx) return@collect
+
+                armed = false
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                snapping[0] = true
+                scope.launch {
+                    try {
+                        animateJellyScrollTo(listState, offset, target, physics)
+                    } finally {
+                        snapping[0] = false
+                    }
+                }
+            }
+    }
+
+    // Re-arm from the live scroll position rather than the resting one. Each
+    // frame the list spends further from the detent than [reArmDistance] the
+    // magnet wakes back up, so a gesture that drifts away and comes straight
+    // back can catch again — with an idle-only check its final position could
+    // sit inside the dead zone and leave it permanently off.
+    LaunchedEffect(listState, enabled, reservePx, reArmPx) {
+        if (!enabled) return@LaunchedEffect
+        snapshotFlow {
+            abs(immersiveHeroOffset(listState) - immersiveSnapOffsetPx(listState, reservePx)) > reArmPx
+        }
+            .distinctUntilChanged()
+            .collect { farAway -> if (farAway) armed = true }
+    }
+
+    return derivedStateOf {
+        val target = immersiveSnapOffsetPx(listState, reservePx)
+        enabled && target > 0f && immersiveHeroOffset(listState) >= target
+    }.value
+}
+
+/**
+ * Direction-driven visibility for an immersive header's actions: they retire as
+ * soon as the list travels down by [scrollThreshold] and return as soon as it
+ * travels back up by the same amount, regardless of how far into the page the
+ * user is. Position never decides anything, so a snap releasing or a fling
+ * coasting past a point cannot bring the buttons back on their own.
+ *
+ * The threshold is a drift accumulator rather than an instantaneous read, which
+ * absorbs the sub-pixel jitter at the tail of a fling that would otherwise make
+ * the row strobe.
+ */
+@Composable
+fun rememberImmersiveHeaderActionsVisible(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    enabled: Boolean = true,
+    scrollThreshold: androidx.compose.ui.unit.Dp = 24.dp
+): Boolean {
+    if (!enabled) return true
+    val thresholdPx = with(LocalDensity.current) { scrollThreshold.toPx() }
+    val visible = remember { mutableStateOf(true) }
+
+    LaunchedEffect(listState, thresholdPx) {
+        var previous = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        var drift = 0f
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { current ->
+                if (current.first != previous.first) {
+                    // Crossing item bounds means the list moved further in one
+                    // frame than any offset delta can describe, so take the
+                    // direction at face value and trip immediately.
+                    drift = if (current.first > previous.first) thresholdPx else -thresholdPx
+                } else {
+                    drift += (current.second - previous.second).toFloat()
+                }
+                previous = current
+                if (abs(drift) >= thresholdPx) {
+                    visible.value = drift < 0f
+                    drift = 0f
+                }
+            }
+    }
+    return visible.value
+}
+
+/**
+ * Seeks the list from [from] to [to] by integrating the project's damped
+ * harmonic oscillator frame by frame. Damping is heavier than the overscroll
+ * jiggle on purpose: a detent should click into place with a hint of
+ * overshoot, not wobble. Stops early if the list runs into its own bound.
+ */
+private suspend fun animateJellyScrollTo(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    from: Float,
+    to: Float,
+    physics: JigglePhysicsSettings
+) {
+    val omega0 = sqrt(physics.stiffness / physics.mass)
+    val damping = 0.55f * 2f * omega0
+    val stiffnessOverMass = omega0 * omega0
+
+    listState.scroll {
+        var position = from
+        var actual = from
+        var velocity = 0f
+        var lastFrame = withFrameNanos { it }
+        val deadline = lastFrame + 900_000_000L
+
+        while (true) {
+            val now = withFrameNanos { it }
+            if (now >= deadline) {
+                scrollBy(to - actual)
+                break
+            }
+            val dt = ((now - lastFrame) / 1_000_000_000f).coerceAtMost(1f / 30f)
+            lastFrame = now
+
+            velocity += (stiffnessOverMass * (to - position) - damping * velocity) * dt
+            position += velocity * dt
+
+            val wanted = position - actual
+            val consumed = scrollBy(wanted)
+            actual += consumed
+            if (abs(consumed - wanted) > 0.5f) break
+            if (abs(to - actual) < 0.5f && abs(velocity) < 1f) break
+        }
+    }
+}
+
+/**
+ * Jelly fade + slide used to retire the header's actions while the title is
+ * magnetically parked. Reuses the same bouncy spec the jelly buttons already
+ * animate with. [slideLeft] mirrors the direction for left-aligned controls.
+ */
+@Composable
+fun ImmersiveActionVisibility(
+    visible: Boolean,
+    slideLeft: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    val slide: (Int) -> Int = if (slideLeft) { x -> -x / 2 } else { x -> x / 2 }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)) +
+            slideInHorizontally(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), initialOffsetX = slide) +
+            scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), initialScale = 0.7f),
+        exit = fadeOut(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)) +
+            slideOutHorizontally(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), targetOffsetX = slide) +
+            scaleOut(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), targetScale = 0.7f)
+    ) { content() }
+}
+
+/**
+ * Immersive artwork layer. It sits BEHIND the scrolling content and does not
+ * participate in the jelly overscroll. On scroll it drifts up at
+ * [parallaxFactor] of the content's speed and fades its own alpha to 0,
+ * revealing the flat [immersiveColor] background underneath (so there is never
+ * a blend seam). The caller supplies the image via [artwork]; the bottom
+ * gradient is applied here. Place inside a Box and pass
+ * `Modifier.align(Alignment.TopCenter)`.
+ */
+@Composable
+fun ImmersiveArtworkBackdrop(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    immersiveColor: Color,
+    modifier: Modifier = Modifier,
+    parallaxFactor: Float = 0.6f,
+    artwork: @Composable () -> Unit
+) {
+    val header = rememberImmersiveHeaderState(listState)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .graphicsLayer {
+                alpha = 1f - header.collapse
+                translationY = -header.scrollOffsetPx * parallaxFactor
+            }
+    ) {
+        artwork()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(immersiveColor.copy(alpha = 0f), immersiveColor)
+                    )
+                )
+        )
+    }
+}
+
+/**
+ * Immersive status-bar scrim: a short band of the page's own background colour
+ * that fades to transparent going down, sized to the status bar inset plus a
+ * small tail. Draw it above the scrolling content so the clock and battery
+ * icons stay readable once the artwork is gone. Place inside a Box and pass
+ * `Modifier.align(Alignment.TopCenter)`.
+ *
+ * Cross-fades with the hero artwork off the same [collapse] progress the
+ * artwork backdrop uses, so the band is invisible while artwork sits under it
+ * and reaches full strength exactly when the artwork finishes dissolving into
+ * the background rather than stacking on top of it.
+ */
+@Composable
+fun ImmersiveTopScrim(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    color: Color,
+    height: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier
+) {
+    val header = rememberImmersiveHeaderState(listState)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .graphicsLayer { alpha = header.collapse }
+            .background(
+                Brush.verticalGradient(
+                    colorStops = arrayOf(
+                        0f to color,
+                        0.45f to color.copy(alpha = 0.72f),
+                        1f to color.copy(alpha = 0f)
+                    )
+                )
+            )
+    )
+}
 
 val LocalAppBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 

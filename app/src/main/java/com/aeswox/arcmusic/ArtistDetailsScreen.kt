@@ -80,14 +80,26 @@ fun ArtistDetailsScreen(
     )
 
     val immersiveMode by viewModel.immersiveModeEnabled.collectAsState()
+    val isDark = isDarkTheme()
     val rawImmersiveColor by rememberDominantColor(artist?.photoUri, Color(0xFF211F26))
-    val immersiveColor = remember(rawImmersiveColor) { immersiveBackground(rawImmersiveColor) }
-    val immersiveAccent by rememberVibrantColor(artist?.photoUri, MaterialTheme.colorScheme.secondary, immersiveColor)
+    val immersiveColor = remember(rawImmersiveColor, isDark) { immersiveBackground(rawImmersiveColor, isDark) }
+    val baseAccent by rememberVibrantColor(artist?.photoUri, MaterialTheme.colorScheme.secondary, immersiveColor)
+    val immersiveAccent = remember(baseAccent, isDark) { darkenTowardBlack(baseAccent, isDark, threshold = 0.60f, maxMix = 0.40f) }
     LaunchedEffect(immersiveMode, immersiveColor) {
         viewModel.setImmersiveScrimColor(if (immersiveMode) immersiveColor else null)
     }
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val headerCollapsed = rememberImmersiveHeaderSnap(
+        listState = listState,
+        headerRowCenter = topInset + 36.dp,
+        enabled = immersiveMode
+    )
+    val actionsVisible = rememberImmersiveHeaderActionsVisible(
+        listState = listState,
+        enabled = immersiveMode
+    )
 
     if (artist == null) {
         Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
@@ -131,7 +143,21 @@ fun ArtistDetailsScreen(
                 else Modifier.systemBarsPadding()
             )
     ) {
+        if (immersiveMode) {
+            ImmersiveArtworkBackdrop(
+                listState = listState,
+                immersiveColor = immersiveColor,
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                com.aeswox.arcmusic.ui.components.ArtistImage(
+                    model = artist?.photoUri ?: "",
+                    contentDescription = "Artist Image",
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
         LazyColumn(
+            state = listState,
             modifier = Modifier.physicsBounceOverscroll().fillMaxSize(),
             contentPadding = PaddingValues(bottom = if (immersiveMode) bottomPadding + bottomInset else bottomPadding)
         ) {
@@ -141,8 +167,9 @@ fun ArtistDetailsScreen(
                     tracks = tracks,
                     viewModel = viewModel,
                     immersive = immersiveMode,
-                    immersiveColor = immersiveColor,
-                    immersiveAccent = immersiveAccent
+                    immersiveAccent = immersiveAccent,
+                    collapsed = headerCollapsed,
+                    onBack = onNavigateBack
                 )
             }
             if (immersiveMode) {
@@ -160,7 +187,16 @@ fun ArtistDetailsScreen(
                 ArtistAboutSection(artist = artist, immersive = immersiveMode)
             }
         }
-        
+
+        if (immersiveMode) {
+            ImmersiveTopScrim(
+                listState = listState,
+                color = immersiveColor,
+                height = topInset + 20.dp,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -168,62 +204,66 @@ fun ArtistDetailsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            JellyIconButton(
-                onClick = onNavigateBack,
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(if (immersiveMode) immersiveAccent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
-            ) {
-                Icon(
-                    imageVector = HugeIcons.ArrowLeft,
-                    contentDescription = "Back",
-                    tint = if (immersiveMode) Color.White else MaterialTheme.colorScheme.onSurface
+            ImmersiveActionVisibility(visible = actionsVisible, slideLeft = true) {
+                JellyIconButton(
+                    onClick = onNavigateBack,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (immersiveMode) immersiveAccent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.ArrowLeft,
+                        contentDescription = "Back",
+                        tint = if (immersiveMode) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            ImmersiveActionVisibility(visible = actionsVisible) {
+                MorphingMenu(
+                    items = listOf(
+                        MorphingMenuItem(
+                            text = "Refresh",
+                            icon = Icons.Outlined.Refresh,
+                            onClick = {
+                                if (artist != null) {
+                                    viewModel.refetchArtistDetails(artistId, artist!!.name)
+                                }
+                            }
+                        ),
+                        MorphingMenuItem(
+                            text = "Share",
+                            icon = HugeIcons.Share,
+                            onClick = {
+                                onNavigateToShare("artist", artistId)
+                            }
+                        ),
+                        MorphingMenuItem(
+                            text = "Change image (gallery)",
+                            icon = Icons.Outlined.Image,
+                            onClick = {
+                                galleryLauncher.launch(arrayOf("image/*"))
+                            }
+                        ),
+                        MorphingMenuItem(
+                            text = "Change image (online)",
+                            icon = Icons.Outlined.Public,
+                            onClick = {
+                                showInternetSearch = true
+                            }
+                        ),
+                        MorphingMenuItem(
+                            text = "Delete",
+                            icon = HugeIcons.Delete,
+                            isDestructive = true,
+                            onClick = { }
+                        )
+                    ),
+                    buttonBackground = if (immersiveMode) immersiveAccent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
+                    tint = if (immersiveMode) Color.White else MaterialTheme.colorScheme.onSurface,
+                    immersive = immersiveMode,
+                    immersiveAccent = immersiveAccent
                 )
             }
-            MorphingMenu(
-                items = listOf(
-                    MorphingMenuItem(
-                        text = "Refresh",
-                        icon = Icons.Outlined.Refresh,
-                        onClick = {
-                            if (artist != null) {
-                                viewModel.refetchArtistDetails(artistId, artist!!.name)
-                            }
-                        }
-                    ),
-                    MorphingMenuItem(
-                        text = "Share",
-                        icon = HugeIcons.Share,
-                        onClick = { 
-                            onNavigateToShare("artist", artistId)
-                        }
-                    ),
-                    MorphingMenuItem(
-                        text = "Change image (gallery)",
-                        icon = Icons.Outlined.Image,
-                        onClick = {
-                            galleryLauncher.launch(arrayOf("image/*"))
-                        }
-                    ),
-                    MorphingMenuItem(
-                        text = "Change image (online)",
-                        icon = Icons.Outlined.Public,
-                        onClick = {
-                            showInternetSearch = true
-                        }
-                    ),
-                    MorphingMenuItem(
-                        text = "Delete",
-                        icon = HugeIcons.Delete,
-                        isDestructive = true,
-                        onClick = { }
-                    )
-                ),
-                buttonBackground = if (immersiveMode) immersiveAccent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
-                tint = if (immersiveMode) Color.White else MaterialTheme.colorScheme.onSurface,
-                immersive = immersiveMode,
-                immersiveAccent = immersiveAccent
-            )
         }
         
 
@@ -249,8 +289,9 @@ fun ArtistHeroSection(
     tracks: List<Track>,
     viewModel: MusicViewModel,
     immersive: Boolean = false,
-    immersiveColor: Color = Color.Transparent,
-    immersiveAccent: Color = Color.Transparent
+    immersiveAccent: Color = Color.Transparent,
+    collapsed: Boolean = false,
+    onBack: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -269,23 +310,7 @@ fun ArtistHeroSection(
                         else Modifier.aspectRatio(4f/3f).clip(RoundedCornerShape(48.dp))
                     )
             ) {
-                com.aeswox.arcmusic.ui.components.ArtistImage(
-                    model = artist?.photoUri ?: "",
-                    contentDescription = "Artist Image",
-                    modifier = Modifier.fillMaxSize()
-                )
                 if (immersive) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(260.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(immersiveColor.copy(alpha = 0f), immersiveColor)
-                                )
-                            )
-                    )
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -301,7 +326,13 @@ fun ArtistHeroSection(
                             fontSize = 40.sp,
                             lineHeight = 46.sp,
                             maxLines = 1,
-                            modifier = Modifier.basicMarquee()
+                            modifier = Modifier
+                                .jellyClick(
+                                    enabled = collapsed,
+                                    onClickLabel = "Go back",
+                                    onClick = onBack
+                                )
+                                .basicMarquee()
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(
@@ -350,6 +381,11 @@ fun ArtistHeroSection(
                         }
                     }
                 } else {
+                    com.aeswox.arcmusic.ui.components.ArtistImage(
+                        model = artist?.photoUri ?: "",
+                        contentDescription = "Artist Image",
+                        modifier = Modifier.fillMaxSize()
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxSize()

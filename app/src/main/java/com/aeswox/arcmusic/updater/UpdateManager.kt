@@ -50,7 +50,20 @@ class UpdateManager(private val context: Context) {
         .build()
     private val api = retrofit.create(GitHubApi::class.java)
 
-    suspend fun checkForUpdates(owner: String, repo: String): UpdateResult = withContext(Dispatchers.IO) {
+    private var lastDownloadId: Long = -1L
+
+    fun installDownloadedUpdate() {
+        if (lastDownloadId != -1L) installApk(context, lastDownloadId)
+    }
+
+    /**
+     * Release source for the in-app updater. Kept as defaults so the account and
+     * repo live in one place — see [GitHubApi.getLatestRelease].
+     */
+    suspend fun checkForUpdates(
+        owner: String = "aesw0x",
+        repo: String = "arcmusic"
+    ): UpdateResult = withContext(Dispatchers.IO) {
         try {
             val release = api.getLatestRelease(owner, repo)
             val latestVersion = release.tag_name.removePrefix("v")
@@ -120,6 +133,7 @@ class UpdateManager(private val context: Context) {
         if (file.exists()) file.delete()
 
         val downloadId = downloadManager.enqueue(request)
+        lastDownloadId = downloadId
 
         val onComplete = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {

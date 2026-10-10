@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,14 +89,26 @@ fun PlaylistDetailsScreen(
         ?: firstTrackWithArt?.albumId?.let { "content://media/external/audio/albumart/$it" }
         ?: "https://lh3.googleusercontent.com/aida-public/AB6AXuDK2gSPmhFiKqcqPLlCJlIp7lxpTt2scS9SuOmzxmZKXa1UQIjSKITZh8tGxaLLsMWtK_rqugpIF6kWjdqifIFpbIHQ51KFkHHGCwprGn7T1jWwAFiUiOgft22mJtHc311emev_Y9qChhO44k-VwJC7dvX80Zs-JHFurqrp7BRfflgHO2uz-vspGyR9BoWhQUaXuELDgddlmK__JFlAjdrkjKUgyxH0SVRHhhE0iqWq7lQMTieDIl6s1Oh1frE5nhxruwt9dXwi3SRK" // Fallback
 
+    val isDark = isDarkTheme()
     val rawImmersiveColor by rememberDominantColor(coverUrl, Color(0xFF211F26))
-    val immersiveColor = remember(rawImmersiveColor) { immersiveBackground(rawImmersiveColor) }
-    val immersiveAccent by rememberVibrantColor(coverUrl, MaterialTheme.colorScheme.secondary, immersiveColor)
+    val immersiveColor = remember(rawImmersiveColor, isDark) { immersiveBackground(rawImmersiveColor, isDark) }
+    val baseAccent by rememberVibrantColor(coverUrl, MaterialTheme.colorScheme.secondary, immersiveColor)
+    val immersiveAccent = remember(baseAccent, isDark) { darkenTowardBlack(baseAccent, isDark, threshold = 0.60f, maxMix = 0.40f) }
     LaunchedEffect(immersiveMode, immersiveColor) {
         viewModel.setImmersiveScrimColor(if (immersiveMode) immersiveColor else null)
     }
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val headerCollapsed = rememberImmersiveHeaderSnap(
+        listState = listState,
+        headerRowCenter = topInset + 36.dp,
+        enabled = immersiveMode
+    )
+    val actionsVisible = rememberImmersiveHeaderActionsVisible(
+        listState = listState,
+        enabled = immersiveMode
+    )
 
     val menuItems = remember(playlist, tracks) {
         val list = mutableListOf<MorphingMenuItem>()
@@ -154,7 +165,22 @@ fun PlaylistDetailsScreen(
                 else Modifier.systemBarsPadding()
             )
     ) {
+        if (immersiveMode) {
+            ImmersiveArtworkBackdrop(
+                listState = listState,
+                immersiveColor = immersiveColor,
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = "Playlist Cover",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .physicsBounceOverscroll()
@@ -167,23 +193,6 @@ fun PlaylistDetailsScreen(
             if (immersiveMode) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
-                        AsyncImage(
-                            model = coverUrl,
-                            contentDescription = "Playlist Cover",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(260.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(immersiveColor.copy(alpha = 0f), immersiveColor)
-                                    )
-                                )
-                        )
                         Column(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -199,6 +208,11 @@ fun PlaylistDetailsScreen(
                                 fontSize = 40.sp,
                                 lineHeight = 46.sp,
                                 maxLines = 1,
+                                modifier = Modifier.jellyClick(
+                                    enabled = headerCollapsed,
+                                    onClickLabel = "Go back",
+                                    onClick = onNavigateBack
+                                ),
                                 overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.height(16.dp))
@@ -268,11 +282,21 @@ fun PlaylistDetailsScreen(
             }
         }
         
+        if (immersiveMode) {
+            ImmersiveTopScrim(
+                listState = listState,
+                color = immersiveColor,
+                height = topInset + 20.dp,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
+
         PlaylistDetailsHeader(
             onNavigateBack = onNavigateBack, 
             menuItems = menuItems,
             immersive = immersiveMode,
             accent = immersiveAccent,
+            actionsVisible = actionsVisible,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = if (immersiveMode) topInset + 16.dp else 48.dp, start = 24.dp, end = 24.dp)
@@ -529,6 +553,7 @@ fun PlaylistDetailsHeader(
     menuItems: List<MorphingMenuItem> = emptyList(),
     immersive: Boolean = false,
     accent: Color = Color.White,
+    actionsVisible: Boolean = true,
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     Row(
@@ -536,38 +561,42 @@ fun PlaylistDetailsHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        JellyIconButton(
-            onClick = onNavigateBack,
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
-        ) {
-            Icon(
-                imageVector = HugeIcons.ArrowLeft,
-                contentDescription = "Back",
-                tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
-            )
-        }
-        if (menuItems.isNotEmpty()) {
-            MorphingMenu(
-                items = menuItems,
-                buttonBackground = if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
-                tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface,
-                immersive = immersive,
-                immersiveAccent = accent
-            )
-        } else {
+        ImmersiveActionVisibility(visible = actionsVisible, slideLeft = true) {
             JellyIconButton(
-                onClick = { },
+                onClick = onNavigateBack,
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
             ) {
                 Icon(
-                    imageVector = HugeIcons.MoreVert,
-                    contentDescription = "More",
+                    imageVector = HugeIcons.ArrowLeft,
+                    contentDescription = "Back",
                     tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+        ImmersiveActionVisibility(visible = actionsVisible) {
+            if (menuItems.isNotEmpty()) {
+                MorphingMenu(
+                    items = menuItems,
+                    buttonBackground = if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
+                    tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface,
+                    immersive = immersive,
+                    immersiveAccent = accent
+                )
+            } else {
+                JellyIconButton(
+                    onClick = { },
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+                ) {
+                    Icon(
+                        imageVector = HugeIcons.MoreVert,
+                        contentDescription = "More",
+                        tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }

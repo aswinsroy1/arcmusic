@@ -41,7 +41,8 @@ fun UpdaterOverlay(
     updateResult: UpdateResult,
     downloadState: DownloadState,
     onDismiss: () -> Unit,
-    onUpdateClick: (UpdateResult.UpdateAvailable) -> Unit
+    onUpdateClick: (UpdateResult.UpdateAvailable) -> Unit,
+    onInstallClick: () -> Unit
 ) {
     AnimatedVisibility(
         visible = isVisible,
@@ -86,7 +87,8 @@ fun UpdaterOverlay(
                         updateResult = updateResult,
                         downloadState = downloadState,
                         onDismiss = onDismiss,
-                        onUpdateClick = onUpdateClick
+                        onUpdateClick = onUpdateClick,
+                        onInstallClick = onInstallClick
                     )
                 }
             }
@@ -99,7 +101,8 @@ fun UpdaterCard(
     updateResult: UpdateResult,
     downloadState: DownloadState,
     onDismiss: () -> Unit,
-    onUpdateClick: (UpdateResult.UpdateAvailable) -> Unit
+    onUpdateClick: (UpdateResult.UpdateAvailable) -> Unit,
+    onInstallClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -274,12 +277,16 @@ fun UpdaterCard(
                                 }
                             }
                             is DownloadState.ReadyToInstall -> {
-                                Text(
-                                    text = "Ready to install!",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                )
+                                Button(
+                                    onClick = onInstallClick,
+                                    modifier = Modifier.jellyClick { onInstallClick() },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                ) {
+                                    Text("Ready to install!", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
