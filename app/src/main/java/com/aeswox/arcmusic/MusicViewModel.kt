@@ -286,6 +286,15 @@ class MusicViewModel @Inject constructor(
     val immersiveModeEnabled: StateFlow<Boolean> = settingsRepository.immersiveModeEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    // Published by immersive detail screens (artist/album/playlist) so the bottom-chrome
+    // scrim in MainActivity can tint itself to match the page background. Null when not
+    // on an immersive detail page. Gated in MainActivity by route + immersiveModeEnabled.
+    private val _immersiveScrimColor = MutableStateFlow<androidx.compose.ui.graphics.Color?>(null)
+    val immersiveScrimColor: StateFlow<androidx.compose.ui.graphics.Color?> = _immersiveScrimColor.asStateFlow()
+    fun setImmersiveScrimColor(color: androidx.compose.ui.graphics.Color?) {
+        _immersiveScrimColor.value = color
+    }
+
     fun setShowWelcomeOverlay(show: Boolean) {
         _showWelcomeOverlay.value = show
     }

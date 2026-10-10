@@ -57,7 +57,9 @@ fun MorphingMenu(
     menuWidth: Dp = 230.dp,
     contentDescription: String? = "More options",
     tint: Color = MaterialTheme.colorScheme.onSurface,
-    buttonBackground: Color = Color.Transparent
+    buttonBackground: Color = Color.Transparent,
+    immersive: Boolean = false,
+    immersiveAccent: Color = Color.White
 ) {
     var isOpen by remember { mutableStateOf(false) }
     var isDismissing by remember { mutableStateOf(false) }
@@ -157,7 +159,11 @@ fun MorphingMenu(
                     }
 
                     val currentElevation = lerp(0.dp, 12.dp, progress) * popupAlpha
-                    val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f * popupAlpha)
+                    val borderColor = if (immersive) {
+                        Color.White.copy(alpha = 0.25f * popupAlpha)
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f * popupAlpha)
+                    }
 
                     Surface(
                         modifier = Modifier
@@ -181,7 +187,7 @@ fun MorphingMenu(
                                 // Consume clicks inside the card so it doesn't dismiss
                             },
                         shape = RoundedCornerShape(currentCorner),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                        color = if (immersive) immersiveAccent else MaterialTheme.colorScheme.surfaceContainerHigh
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -205,7 +211,9 @@ fun MorphingMenu(
                                             item = item,
                                             onItemClick = {
                                                 dismiss { item.onClick() }
-                                            }
+                                            },
+                                            immersive = immersive,
+                                            immersiveAccent = immersiveAccent
                                         )
                                     }
                                 }
@@ -221,10 +229,22 @@ fun MorphingMenu(
 @Composable
 private fun MorphingMenuItemRow(
     item: MorphingMenuItem,
-    onItemClick: () -> Unit
+    onItemClick: () -> Unit,
+    immersive: Boolean = false,
+    immersiveAccent: Color = Color.White
 ) {
-    val textColor = if (item.isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-    val iconTint = if (item.isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    val textColor = when {
+        item.isDestructive && immersive -> Color(0xFFFFB4AB) // soft red readable on accent
+        item.isDestructive -> MaterialTheme.colorScheme.error
+        immersive -> Color.White
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val iconTint = when {
+        item.isDestructive && immersive -> Color(0xFFFFB4AB)
+        item.isDestructive -> MaterialTheme.colorScheme.error
+        immersive -> Color.White.copy(alpha = 0.6f)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     Row(
         modifier = Modifier

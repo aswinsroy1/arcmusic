@@ -209,10 +209,11 @@ fun AnimatedBadge(
 fun BottomChromeGradient(
     height: Dp,
     alpha: Float = 1f,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    colorOverride: Color? = null
 ) {
     if (height <= 0.dp) return
-    val bgColor = MaterialTheme.colorScheme.background
+    val bgColor = colorOverride ?: MaterialTheme.colorScheme.background
     Box(
         modifier = modifier
             .fillMaxWidth()

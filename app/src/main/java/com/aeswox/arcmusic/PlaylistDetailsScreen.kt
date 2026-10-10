@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,8 +59,12 @@ fun PlaylistDetailsScreen(
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
+    val immersiveMode by viewModel.immersiveModeEnabled.collectAsState()
+
     if (playlist == null) {
-        PlaylistDetailsSkeleton(onNavigateBack = onNavigateBack)
+        Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+            PlaylistDetailsSkeleton(onNavigateBack = onNavigateBack)
+        }
         return
     }
 
@@ -84,6 +89,15 @@ fun PlaylistDetailsScreen(
     val coverUrl = playlist?.coverArtUri
         ?: firstTrackWithArt?.albumId?.let { "content://media/external/audio/albumart/$it" }
         ?: "https://lh3.googleusercontent.com/aida-public/AB6AXuDK2gSPmhFiKqcqPLlCJlIp7lxpTt2scS9SuOmzxmZKXa1UQIjSKITZh8tGxaLLsMWtK_rqugpIF6kWjdqifIFpbIHQ51KFkHHGCwprGn7T1jWwAFiUiOgft22mJtHc311emev_Y9qChhO44k-VwJC7dvX80Zs-JHFurqrp7BRfflgHO2uz-vspGyR9BoWhQUaXuELDgddlmK__JFlAjdrkjKUgyxH0SVRHhhE0iqWq7lQMTieDIl6s1Oh1frE5nhxruwt9dXwi3SRK" // Fallback
+
+    val rawImmersiveColor by rememberDominantColor(coverUrl, Color(0xFF211F26))
+    val immersiveColor = remember(rawImmersiveColor) { immersiveBackground(rawImmersiveColor) }
+    val immersiveAccent by rememberVibrantColor(coverUrl, MaterialTheme.colorScheme.secondary, immersiveColor)
+    LaunchedEffect(immersiveMode, immersiveColor) {
+        viewModel.setImmersiveScrimColor(if (immersiveMode) immersiveColor else null)
+    }
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     val menuItems = remember(playlist, tracks) {
         val list = mutableListOf<MorphingMenuItem>()
@@ -132,23 +146,107 @@ fun PlaylistDetailsScreen(
         list
     }
 
-    if (playlist == null) {
-        PlaylistDetailsSkeleton(onNavigateBack = onNavigateBack)
-    } else {
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .physicsBounceOverscroll()
-                    .padding(horizontal = 24.dp),
-                contentPadding = PaddingValues(top = 104.dp, bottom = bottomPadding)
-            ) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (immersiveMode) Modifier.background(immersiveColor)
+                else Modifier.systemBarsPadding()
+            )
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .physicsBounceOverscroll()
+                .then(if (immersiveMode) Modifier else Modifier.padding(horizontal = 24.dp)),
+            contentPadding = PaddingValues(
+                top = if (immersiveMode) 0.dp else 104.dp,
+                bottom = if (immersiveMode) bottomPadding + bottomInset else bottomPadding
+            )
+        ) {
+            if (immersiveMode) {
                 item {
+                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+                        AsyncImage(
+                            model = coverUrl,
+                            contentDescription = "Playlist Cover",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(immersiveColor.copy(alpha = 0f), immersiveColor)
+                                    )
+                                )
+                        )
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .offset(y = 28.dp)
+                                .padding(horizontal = 24.dp)
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = playlist?.name ?: "Unknown Playlist",
+                                style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.ExtraBold),
+                                color = Color.White,
+                                fontSize = 40.sp,
+                                lineHeight = 46.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                JellyButton(
+                                    onClick = { viewModel.setCurrentlyPlaying(tracks.firstOrNull(), tracks) },
+                                    modifier = Modifier.weight(1f).height(56.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White),
+                                    shape = RoundedCornerShape(28.dp)
+                                ) {
+                                    Icon(imageVector = HugeIcons.Play, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Play", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                }
+                                JellyButton(
+                                    onClick = {
+                                        val shuffled = tracks.shuffled()
+                                        viewModel.setCurrentlyPlaying(shuffled.firstOrNull(), shuffled)
+                                    },
+                                    modifier = Modifier.weight(1f).height(56.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = immersiveAccent, contentColor = Color.White),
+                                    shape = RoundedCornerShape(28.dp)
+                                ) {
+                                    Icon(imageVector = HugeIcons.Shuffle, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Shuffle", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+                item {
+                    Spacer(modifier = Modifier.height(52.dp))
+                }
+            }
+            item {
+                Box(modifier = if (immersiveMode) Modifier.padding(horizontal = 24.dp) else Modifier) {
                     PlaylistDetailsInfo(
                         playlist = playlist,
                         coverUrl = coverUrl,
                         tracks = tracks,
                         durationText = durationText,
+                        showArtwork = !immersiveMode,
+                        immersive = immersiveMode,
                         onPlay = { viewModel.setCurrentlyPlaying(tracks.firstOrNull(), tracks) },
                         onShuffle = { 
                             val shuffled = tracks.shuffled()
@@ -156,24 +254,29 @@ fun PlaylistDetailsScreen(
                         }
                     )
                 }
-                item {
+            }
+            item {
+                Box(modifier = if (immersiveMode) Modifier.padding(horizontal = 24.dp) else Modifier) {
                     PlaylistTracksList(
                         tracks = tracks,
                         currentlyPlaying = currentlyPlaying,
                         isPlaying = isPlaying,
+                        immersive = immersiveMode,
                         onTrackClick = { track -> viewModel.setCurrentlyPlaying(track, tracks) }
                     )
                 }
             }
-            
-            PlaylistDetailsHeader(
-                onNavigateBack = onNavigateBack, 
-                menuItems = menuItems,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 48.dp, start = 24.dp, end = 24.dp)
-            )
         }
+        
+        PlaylistDetailsHeader(
+            onNavigateBack = onNavigateBack, 
+            menuItems = menuItems,
+            immersive = immersiveMode,
+            accent = immersiveAccent,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = if (immersiveMode) topInset + 16.dp else 48.dp, start = 24.dp, end = 24.dp)
+        )
     }
 
     if (showDeleteConfirmDialog) {
@@ -424,6 +527,8 @@ fun EditPlaylistSheetContent(
 fun PlaylistDetailsHeader(
     onNavigateBack: () -> Unit,
     menuItems: List<MorphingMenuItem> = emptyList(),
+    immersive: Boolean = false,
+    accent: Color = Color.White,
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     Row(
@@ -435,31 +540,33 @@ fun PlaylistDetailsHeader(
             onClick = onNavigateBack,
             modifier = Modifier
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+                .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
         ) {
             Icon(
                 imageVector = HugeIcons.ArrowLeft,
                 contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
             )
         }
         if (menuItems.isNotEmpty()) {
             MorphingMenu(
                 items = menuItems,
-                buttonBackground = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
-                tint = MaterialTheme.colorScheme.onSurface
+                buttonBackground = if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
+                tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface,
+                immersive = immersive,
+                immersiveAccent = accent
             )
         } else {
             JellyIconButton(
                 onClick = { },
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+                    .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
             ) {
                 Icon(
                     imageVector = HugeIcons.MoreVert,
                     contentDescription = "More",
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -472,25 +579,53 @@ fun PlaylistDetailsInfo(
     coverUrl: String,
     tracks: List<com.aeswox.arcmusic.db.entities.Track>,
     durationText: String,
+    showArtwork: Boolean = true,
+    immersive: Boolean = false,
     onPlay: () -> Unit,
     onShuffle: () -> Unit
 ) {
     val subtitleText = "My Playlist"
+
+    if (immersive) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = subtitleText,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = Color.White.copy(alpha = 0.7f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!playlist?.description.isNullOrBlank()) {
+                Text(
+                    text = playlist?.description ?: "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+        return
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(24.dp))
-        AsyncImage(
-            model = coverUrl,
-            contentDescription = "Playlist Cover",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(280.dp)
-                .clip(RoundedCornerShape(36.dp))
-        )
-        Spacer(modifier = Modifier.height(32.dp))
+        if (showArtwork) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = "Playlist Cover",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(280.dp)
+                    .clip(RoundedCornerShape(36.dp))
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+        }
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.Start
@@ -620,6 +755,7 @@ fun PlaylistTracksList(
     tracks: List<com.aeswox.arcmusic.db.entities.Track>,
     currentlyPlaying: com.aeswox.arcmusic.db.entities.Track?,
     isPlaying: Boolean,
+    immersive: Boolean = false,
     onTrackClick: (com.aeswox.arcmusic.db.entities.Track) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -644,14 +780,14 @@ fun PlaylistTracksList(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(32.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+            .background(immersiveCardColor(immersive))
             .animateContentSize(androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
             .padding(vertical = 12.dp)
     ) {
         Text(
             text = "TRACKS",
             style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = immersiveMutedColor(immersive),
             modifier = Modifier.padding(start = 72.dp, end = 24.dp, bottom = 16.dp)
         )
         
@@ -668,6 +804,7 @@ fun PlaylistTracksList(
                 duration = durString,
                 qualityBadgeResId = track.getQualityBadgeResId(),
                 isPlaying = isCurrentTrack && isPlaying,
+                immersive = immersive,
                 onClick = { onTrackClick(track) }
             )
         }
@@ -683,13 +820,13 @@ fun PlaylistTracksList(
                 Text(
                     text = "Show more",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = immersiveMutedColor(immersive)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Default.ExpandMore,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = immersiveMutedColor(immersive),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -705,13 +842,14 @@ fun PlaylistTrackItem(
     duration: String,
     qualityBadgeResId: Int? = null,
     isPlaying: Boolean = false,
+    immersive: Boolean = false,
     onClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .jellyClick { onClick() }
-            .background(if (isPlaying) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent)
+            .background(if (isPlaying) (if (immersive) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceContainer) else Color.Transparent)
             .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -719,15 +857,15 @@ fun PlaylistTrackItem(
             if (isPlaying) {
                 // Playing animation placeholder
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom, modifier = Modifier.height(16.dp)) {
-                    Box(modifier = Modifier.width(3.dp).height(8.dp).background(MaterialTheme.colorScheme.primary))
-                    Box(modifier = Modifier.width(3.dp).height(14.dp).background(MaterialTheme.colorScheme.primary))
-                    Box(modifier = Modifier.width(3.dp).height(10.dp).background(MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.width(3.dp).height(8.dp).background(if (immersive) Color.White else MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.width(3.dp).height(14.dp).background(if (immersive) Color.White else MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.width(3.dp).height(10.dp).background(if (immersive) Color.White else MaterialTheme.colorScheme.primary))
                 }
             } else {
                 Text(
                     text = number,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    color = immersiveMutedColor(immersive).copy(alpha = if (immersive) 1f else 0.6f)
                 )
             }
         }
@@ -736,14 +874,14 @@ fun PlaylistTrackItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium),
-                color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                color = if (isPlaying) (if (immersive) Color.White else MaterialTheme.colorScheme.primary) else immersiveTextColor(immersive),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = artist,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                color = immersiveMutedColor(immersive).copy(alpha = if (immersive) 0.8f else 0.8f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -755,14 +893,14 @@ fun PlaylistTrackItem(
                 contentDescription = "Quality",
                 modifier = Modifier.height(16.dp),
                 contentScale = ContentScale.Fit,
-                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant)
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(immersiveMutedColor(immersive))
             )
             Spacer(modifier = Modifier.width(12.dp))
         }
         Text(
             text = duration,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            color = immersiveMutedColor(immersive).copy(alpha = if (immersive) 1f else 0.6f)
         )
     }
 }

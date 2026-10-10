@@ -120,23 +120,28 @@ fun DeveloperSettingsScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // UI Experiments
-            ExpandableSettingsCard(
-                title = "UI Experiments",
-                onReset = {
-                    onImmersiveModeEnabledChange(false)
-                }
-            ) {
+            // Immersive UI
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Immersive Mode",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Column {
+                        Text(
+                            text = "Immersive UI",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Immersive artist, album & playlist pages",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Switch(
                         checked = immersiveModeEnabled,
                         onCheckedChange = { onImmersiveModeEnabledChange(it) }

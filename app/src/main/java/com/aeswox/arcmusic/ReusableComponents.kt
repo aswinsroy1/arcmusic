@@ -41,6 +41,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import dev.chrisbanes.haze.HazeState
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
@@ -76,21 +77,39 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import android.graphics.drawable.BitmapDrawable
 import androidx.palette.graphics.Palette
+import androidx.compose.ui.graphics.toArgb
+import kotlin.math.sqrt
 import com.aeswox.arcmusic.ui.animations.jellyClick
 import com.aeswox.arcmusic.ui.animations.jelly
 import com.aeswox.arcmusic.ui.components.*
 
+// Process-wide cache of extracted Palette swatches keyed by image URI. The immersive page bg,
+// accent, bottom scrim and mini-player tint all derive from these. Caching lets every consumer
+// read the color synchronously on the first frame instead of waiting on Coil + Palette, which
+// used to arrive a few hundred ms late and desync the color morph from the page transition.
+object PaletteCache {
+    private val dominantCache = android.util.LruCache<String, Int>(128)
+    private val vibrantCache = android.util.LruCache<String, Int>(128)
+    fun dominant(key: String): Color? = dominantCache.get(key)?.let { Color(it) }
+    fun vibrant(key: String): Color? = vibrantCache.get(key)?.let { Color(it) }
+    fun putDominant(key: String, color: Color) { dominantCache.put(key, color.toArgb()) }
+    fun putVibrant(key: String, color: Color) { vibrantCache.put(key, color.toArgb()) }
+}
+
 @Composable
 fun rememberDominantColor(imageUrl: String?, defaultColor: Color): State<Color> {
     val context = LocalContext.current
-    val colorState = remember { mutableStateOf(defaultColor) }
+    val colorState = remember(imageUrl) {
+        mutableStateOf(imageUrl?.let { PaletteCache.dominant(it) } ?: defaultColor)
+    }
 
     LaunchedEffect(imageUrl) {
         if (imageUrl == null) {
             colorState.value = defaultColor
             return@LaunchedEffect
         }
-        
+        PaletteCache.dominant(imageUrl)?.let { colorState.value = it; return@LaunchedEffect }
+
         val request = ImageRequest.Builder(context)
             .data(imageUrl)
             .size(128)
@@ -102,10 +121,10 @@ fun rememberDominantColor(imageUrl: String?, defaultColor: Color): State<Color> 
             val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
             if (bitmap != null) {
                 Palette.from(bitmap).generate { palette ->
-                    palette?.dominantSwatch?.rgb?.let { color ->
-                        colorState.value = Color(color)
-                    } ?: palette?.mutedSwatch?.rgb?.let { color ->
-                        colorState.value = Color(color)
+                    val rgb = palette?.dominantSwatch?.rgb ?: palette?.mutedSwatch?.rgb
+                    if (rgb != null) {
+                        PaletteCache.putDominant(imageUrl, Color(rgb))
+                        colorState.value = Color(rgb)
                     }
                 }
             }
@@ -116,6 +135,161 @@ fun rememberDominantColor(imageUrl: String?, defaultColor: Color): State<Color> 
     
     return colorState
 }
+
+@Composable
+fun rememberVibrantColor(imageUrl: String?, fallbackColor: Color, dominantColor: Color): State<Color> {
+    val context = LocalContext.current
+    val colorState = remember(imageUrl, fallbackColor, dominantColor) {
+        mutableStateOf(pickAccent(imageUrl?.let { PaletteCache.vibrant(it) }, fallbackColor, dominantColor))
+    }
+
+    LaunchedEffect(imageUrl, fallbackColor, dominantColor) {
+        if (imageUrl == null) {
+            colorState.value = pickAccent(null, fallbackColor, dominantColor)
+            return@LaunchedEffect
+        }
+        PaletteCache.vibrant(imageUrl)?.let {
+            colorState.value = pickAccent(it, fallbackColor, dominantColor)
+            return@LaunchedEffect
+        }
+
+        val request = ImageRequest.Builder(context)
+            .data(imageUrl)
+            .size(128)
+            .allowHardware(false)
+            .build()
+
+        val result = context.imageLoader.execute(request)
+        if (result is SuccessResult) {
+            val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+            if (bitmap != null) {
+                Palette.from(bitmap).generate { palette ->
+                    palette?.vibrantSwatch?.rgb?.let { PaletteCache.putVibrant(imageUrl, Color(it)) }
+                    colorState.value = pickAccent(
+                        palette?.vibrantSwatch?.rgb?.let { Color(it) },
+                        fallbackColor,
+                        dominantColor
+                    )
+                }
+            }
+        } else {
+            colorState.value = pickAccent(null, fallbackColor, dominantColor)
+        }
+    }
+
+    return colorState
+}
+
+// Fire-and-forget pre-warm of the palette cache for an artwork URI. Call from list/row items so
+// the dominant + vibrant colors are already cached by the time the user opens the immersive page,
+// making the page bg / scrim / mini-player tint resolve on the first frame (no color stutter).
+@Composable
+fun PreloadImmersivePalette(imageUrl: String?) {
+    val context = LocalContext.current
+    LaunchedEffect(imageUrl) {
+        if (imageUrl == null) return@LaunchedEffect
+        if (PaletteCache.dominant(imageUrl) != null && PaletteCache.vibrant(imageUrl) != null) return@LaunchedEffect
+        val request = ImageRequest.Builder(context)
+            .data(imageUrl)
+            .size(128)
+            .allowHardware(false)
+            .build()
+        val result = context.imageLoader.execute(request)
+        if (result is SuccessResult) {
+            val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+            if (bitmap != null) {
+                Palette.from(bitmap).generate { palette ->
+                    (palette?.dominantSwatch?.rgb ?: palette?.mutedSwatch?.rgb)?.let { PaletteCache.putDominant(imageUrl, Color(it)) }
+                    palette?.vibrantSwatch?.rgb?.let { PaletteCache.putVibrant(imageUrl, Color(it)) }
+                }
+            }
+        }
+    }
+}
+
+private fun pickAccent(vibrant: Color?, secondaryColor: Color, backgroundColor: Color): Color = when {
+    vibrant != null && !vibrant.isCloseTo(backgroundColor) -> vibrant
+    secondaryColor != Color.Unspecified && secondaryColor.alpha > 0.01f &&
+        !secondaryColor.isCloseTo(backgroundColor) -> secondaryColor
+    else -> backgroundColor.contrastingShade()
+}
+
+private fun Color.isCloseTo(other: Color): Boolean {
+    val dr = red - other.red
+    val dg = green - other.green
+    val db = blue - other.blue
+    return sqrt(dr * dr + dg * dg + db * db) < 0.15f
+}
+
+fun Color.contrastingShade(): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(this.toArgb(), hsv)
+    hsv[2] = if (hsv[2] < 0.35f) (hsv[2] + 0.35f).coerceAtMost(0.55f) else (hsv[2] * 0.55f).coerceAtLeast(0.15f)
+    return Color(android.graphics.Color.HSVToColor(hsv))
+}
+
+fun immersiveBackground(color: Color): Color {
+    val luminance = 0.2126f * color.red + 0.7152f * color.green + 0.0722f * color.blue
+    if (luminance <= 0.55f) return color
+    val hsl = FloatArray(3)
+    rgbToHsl(color.red, color.green, color.blue, hsl)
+    hsl[2] = minOf(hsl[2], 0.40f)
+    return hslToColor(hsl[0], hsl[1], hsl[2])
+}
+
+private fun rgbToHsl(r: Float, g: Float, b: Float, out: FloatArray) {
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val l = (max + min) / 2f
+    val d = max - min
+    var h = 0f
+    var s = 0f
+    if (d != 0f) {
+        s = if (l < 0.5f) d / (max + min) else d / (2f - max - min)
+        h = when (max) {
+            r -> ((g - b) / d + (if (g < b) 6f else 0f))
+            g -> ((b - r) / d + 2f)
+            else -> ((r - g) / d + 4f)
+        }
+        h /= 6f
+    }
+    out[0] = h
+    out[1] = s
+    out[2] = l
+}
+
+private fun hslToColor(h: Float, s: Float, l: Float): Color {
+    if (s == 0f) return Color(l, l, l)
+    val q = if (l < 0.5f) l * (1f + s) else l + s - l * s
+    val p = 2f * l - q
+    fun hue(t0: Float): Float {
+        var t = t0
+        if (t < 0f) t += 1f
+        if (t > 1f) t -= 1f
+        return when {
+            t < 1f / 6f -> p + (q - p) * 6f * t
+            t < 1f / 2f -> q
+            t < 2f / 3f -> p + (q - p) * (2f / 3f - t) * 6f
+            else -> p
+        }
+    }
+    return Color(hue(h + 1f / 3f), hue(h), hue(h - 1f / 3f))
+}
+
+@Composable
+fun immersiveCardColor(immersive: Boolean): Color =
+    if (immersive) Color.White.copy(alpha = 0.08f)
+    else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f)
+
+@Composable
+fun immersiveTextColor(immersive: Boolean): Color =
+    if (immersive) Color.White
+    else MaterialTheme.colorScheme.onSurface
+
+@Composable
+fun immersiveMutedColor(immersive: Boolean): Color =
+    if (immersive) Color.White.copy(alpha = 0.6f)
+    else MaterialTheme.colorScheme.onSurfaceVariant
 
 val LocalAppBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 
@@ -141,14 +315,18 @@ fun Modifier.glassEffect(
     tintTransparency: Float,
     noiseFactor: Float,
     shape: Shape = RoundedCornerShape(AppCornerRadius),
-    forceFallback: Boolean = false
+    forceFallback: Boolean = false,
+    tintOverride: Color? = null,
+    tintAlphaOverride: Float? = null
 ): Modifier = composed {
     // Detect dark mode from the actual applied color scheme (luminance < 0.05 = dark background).
     val bgLuminance = MaterialTheme.colorScheme.background.luminance()
     val isDark = bgLuminance < 0.05f
-    val tintBase = if (isDark) Color.Black else Color.White
+    // tintOverride lets callers (e.g. immersive mini-player) supply an animated custom tint;
+    // when null we fall back to the theme-aware white/black glass.
+    val tintBase = tintOverride ?: if (isDark) Color.Black else Color.White
     // Dark mode uses slightly higher alpha to keep the glass visible against black.
-    val adjustedAlpha = if (isDark) (tintTransparency + 0.3f).coerceAtMost(0.85f) else tintTransparency
+    val adjustedAlpha = tintAlphaOverride ?: if (isDark) (tintTransparency + 0.3f).coerceAtMost(0.85f) else tintTransparency
 
     if (!forceFallback && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         if (hazeState != null) {
@@ -254,6 +432,8 @@ fun MiniPlayer(
     hazeState: HazeState? = null, 
     tintTransparency: Float = 0.4f, 
     noiseFactor: Float = 0.06f,
+    immersive: Boolean = false,
+    immersiveBg: Color? = null,
     isPlaying: Boolean = false,
     onPlayPauseClick: () -> Unit = {},
     onSkipNextClick: () -> Unit = {},
@@ -266,6 +446,36 @@ fun MiniPlayer(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val offsetY = remember { Animatable(0f) }
+
+    // Immersive tint: a same-hue "raised card" — a slightly lighter shade of the page's own
+    // background — so the mini-player blends into an immersive detail page. Glass blur/noise/shape
+    // are untouched; only the tint color, its alpha and the ink colors change. Animates over 600ms
+    // (matching the page transition) as we enter/leave an immersive route. Non-immersive keeps the
+    // theme-aware white/black glass and theme ink.
+    val themeIsDark = MaterialTheme.colorScheme.background.luminance() < 0.05f
+    val themeTintBase = if (themeIsDark) Color.Black else Color.White
+    val themeAlpha = if (themeIsDark) (tintTransparency + 0.3f).coerceAtMost(0.85f) else tintTransparency
+    val raisedTarget = immersiveBg?.let { lerp(it, Color.White, 0.18f) }
+    val glassTint by animateColorAsState(
+        targetValue = if (immersive && raisedTarget != null) raisedTarget else themeTintBase,
+        animationSpec = tween(durationMillis = 600),
+        label = "miniPlayerGlassTint"
+    )
+    val glassAlpha by animateFloatAsState(
+        targetValue = if (immersive) tintTransparency else themeAlpha,
+        animationSpec = tween(durationMillis = 600),
+        label = "miniPlayerGlassAlpha"
+    )
+    val titleColor by animateColorAsState(
+        targetValue = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface,
+        animationSpec = tween(durationMillis = 600),
+        label = "miniPlayerTitleColor"
+    )
+    val artistColor by animateColorAsState(
+        targetValue = if (immersive) Color.White.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(durationMillis = 600),
+        label = "miniPlayerArtistColor"
+    )
 
     @OptIn(ExperimentalSharedTransitionApi::class)
     val sharedScope = LocalSharedTransitionScope.current
@@ -311,7 +521,7 @@ fun MiniPlayer(
             .padding(horizontal = horizontalPadding)
             .fillMaxWidth()
             .height(76.dp)
-            .then(if (applyShapeAndBackground) Modifier.clip(RoundedCornerShape(AppCornerRadius)).glassEffect(hazeState, tintTransparency, noiseFactor) else Modifier)
+            .then(if (applyShapeAndBackground) Modifier.clip(RoundedCornerShape(AppCornerRadius)).glassEffect(hazeState, tintTransparency, noiseFactor, tintOverride = glassTint, tintAlphaOverride = glassAlpha) else Modifier)
             .jellyClick(scaleDownTo = 0.92f, onClick = onClick)
             .padding(horizontal = 16.dp)
     ) {
@@ -328,13 +538,13 @@ fun MiniPlayer(
             Text(
                 text = title, 
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), 
-                color = MaterialTheme.colorScheme.onSurface, 
+                color = titleColor, 
                 maxLines = 1
             )
             Text(
                 text = artist, 
                 style = MaterialTheme.typography.bodyMedium, 
-                color = MaterialTheme.colorScheme.onSurfaceVariant, 
+                color = artistColor, 
                 maxLines = 1
             )
         }
@@ -342,7 +552,7 @@ fun MiniPlayer(
             Icon(
                 imageVector = if (isPlaying) com.aeswox.arcmusic.ui.components.HugeIcons.Pause else com.aeswox.arcmusic.ui.components.HugeIcons.Play,
                 contentDescription = if (isPlaying) "Pause" else "Play",
-                tint = MaterialTheme.colorScheme.onSurface,
+                tint = titleColor,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -350,7 +560,7 @@ fun MiniPlayer(
             Icon(
                 imageVector = com.aeswox.arcmusic.ui.components.HugeIcons.Next, 
                 contentDescription = "Skip Next", 
-                tint = MaterialTheme.colorScheme.onSurface,
+                tint = titleColor,
                 modifier = Modifier.size(22.dp)
             )
         }

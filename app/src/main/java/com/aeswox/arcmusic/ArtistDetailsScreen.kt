@@ -79,8 +79,20 @@ fun ArtistDetailsScreen(
         label = "artistDetailsBottomPadding"
     )
 
+    val immersiveMode by viewModel.immersiveModeEnabled.collectAsState()
+    val rawImmersiveColor by rememberDominantColor(artist?.photoUri, Color(0xFF211F26))
+    val immersiveColor = remember(rawImmersiveColor) { immersiveBackground(rawImmersiveColor) }
+    val immersiveAccent by rememberVibrantColor(artist?.photoUri, MaterialTheme.colorScheme.secondary, immersiveColor)
+    LaunchedEffect(immersiveMode, immersiveColor) {
+        viewModel.setImmersiveScrimColor(if (immersiveMode) immersiveColor else null)
+    }
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
     if (artist == null) {
-        ArtistDetailsSkeleton(onNavigateBack = onNavigateBack)
+        Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+            ArtistDetailsSkeleton(onNavigateBack = onNavigateBack)
+        }
         return
     }
 
@@ -111,29 +123,48 @@ fun ArtistDetailsScreen(
 
     var showInternetSearch by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (immersiveMode) Modifier.background(immersiveColor)
+                else Modifier.systemBarsPadding()
+            )
+    ) {
         LazyColumn(
             modifier = Modifier.physicsBounceOverscroll().fillMaxSize(),
-            contentPadding = PaddingValues(bottom = bottomPadding)
+            contentPadding = PaddingValues(bottom = if (immersiveMode) bottomPadding + bottomInset else bottomPadding)
         ) {
             item {
-                ArtistHeroSection(artist = artist, tracks = tracks, viewModel = viewModel)
+                ArtistHeroSection(
+                    artist = artist,
+                    tracks = tracks,
+                    viewModel = viewModel,
+                    immersive = immersiveMode,
+                    immersiveColor = immersiveColor,
+                    immersiveAccent = immersiveAccent
+                )
+            }
+            if (immersiveMode) {
+                item {
+                    Spacer(modifier = Modifier.height(if (albums.isEmpty()) 52.dp else 36.dp))
+                }
             }
             item {
-                ArtistAlbumsSection(albums = albums, onNavigateToAlbum = onNavigateToAlbum, onNavigateToAllAlbums = { onNavigateToAllAlbums(artistId) })
+                ArtistAlbumsSection(albums = albums, onNavigateToAlbum = onNavigateToAlbum, onNavigateToAllAlbums = { onNavigateToAllAlbums(artistId) }, immersive = immersiveMode)
             }
             item {
-                ArtistPopularSection(tracks = tracks, viewModel = viewModel, onNavigateToAllTracks = { onNavigateToAllTracks(artistId) })
+                ArtistPopularSection(tracks = tracks, viewModel = viewModel, onNavigateToAllTracks = { onNavigateToAllTracks(artistId) }, immersive = immersiveMode)
             }
             item {
-                ArtistAboutSection(artist = artist)
+                ArtistAboutSection(artist = artist, immersive = immersiveMode)
             }
         }
         
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 48.dp, start = 24.dp, end = 24.dp),
+                .padding(top = if (immersiveMode) topInset + 16.dp else 48.dp, start = 24.dp, end = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -141,12 +172,12 @@ fun ArtistDetailsScreen(
                 onClick = onNavigateBack,
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+                    .background(if (immersiveMode) immersiveAccent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
             ) {
                 Icon(
                     imageVector = HugeIcons.ArrowLeft,
                     contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = if (immersiveMode) Color.White else MaterialTheme.colorScheme.onSurface
                 )
             }
             MorphingMenu(
@@ -188,8 +219,10 @@ fun ArtistDetailsScreen(
                         onClick = { }
                     )
                 ),
-                buttonBackground = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
-                tint = MaterialTheme.colorScheme.onSurface
+                buttonBackground = if (immersiveMode) immersiveAccent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
+                tint = if (immersiveMode) Color.White else MaterialTheme.colorScheme.onSurface,
+                immersive = immersiveMode,
+                immersiveAccent = immersiveAccent
             )
         }
         
@@ -211,37 +244,125 @@ fun ArtistDetailsScreen(
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun ArtistHeroSection(artist: Artist?, tracks: List<Track>, viewModel: MusicViewModel) {
+fun ArtistHeroSection(
+    artist: Artist?,
+    tracks: List<Track>,
+    viewModel: MusicViewModel,
+    immersive: Boolean = false,
+    immersiveColor: Color = Color.Transparent,
+    immersiveAccent: Color = Color.Transparent
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(top = 80.dp, bottom = 32.dp)
+            .then(
+                if (immersive) Modifier
+                else Modifier.padding(horizontal = 24.dp).padding(top = 80.dp, bottom = 32.dp)
+            )
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(4f/3f)
-                    .clip(RoundedCornerShape(48.dp))
+                    .then(
+                        if (immersive) Modifier.aspectRatio(1f)
+                        else Modifier.aspectRatio(4f/3f).clip(RoundedCornerShape(48.dp))
+                    )
             ) {
                 com.aeswox.arcmusic.ui.components.ArtistImage(
                     model = artist?.photoUri ?: "",
                     contentDescription = "Artist Image",
                     modifier = Modifier.fillMaxSize()
                 )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background),
-                                startY = 300f
+                if (immersive) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(immersiveColor.copy(alpha = 0f), immersiveColor)
+                                )
                             )
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .offset(y = 28.dp)
+                            .padding(horizontal = 24.dp)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = artist?.name ?: "Unknown Artist",
+                            style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.ExtraBold),
+                            color = Color.White,
+                            fontSize = 40.sp,
+                            lineHeight = 46.sp,
+                            maxLines = 1,
+                            modifier = Modifier.basicMarquee()
                         )
-                )
-                
-                if (artist != null) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            JellyButton(
+                                onClick = { if (tracks.isNotEmpty()) viewModel.setCurrentlyPlaying(tracks.first(), tracks) },
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White),
+                                shape = RoundedCornerShape(28.dp)
+                            ) {
+                                Icon(imageVector = HugeIcons.Play, contentDescription = null, tint = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Play", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            }
+
+                            JellyButton(
+                                onClick = { if (tracks.isNotEmpty()) viewModel.setCurrentlyPlaying(tracks.random(), tracks.shuffled()) },
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = immersiveAccent, contentColor = Color.White),
+                                shape = RoundedCornerShape(28.dp)
+                            ) {
+                                Icon(imageVector = HugeIcons.Shuffle, contentDescription = null, tint = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Shuffle", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            }
+
+                            if (artist != null) {
+                                JellyIconButton(
+                                    onClick = { viewModel.toggleArtistFavorite(listOf(artist.id), !artist.isFavorite) },
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(CircleShape)
+                                        .background(immersiveAccent)
+                                ) {
+                                    FavoriteHeartIcon(
+                                        isFavorite = artist.isFavorite,
+                                        activeColor = Color(0xFFE53935),
+                                        inactiveColor = Color.White,
+                                        iconSize = 24.dp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background),
+                                    startY = 300f
+                                )
+                            )
+                    )
+                }
+
+                if (artist != null && !immersive) {
                     JellyIconButton(
                         onClick = { viewModel.toggleArtistFavorite(listOf(artist.id), !artist.isFavorite) },
                         modifier = Modifier
@@ -260,101 +381,103 @@ fun ArtistHeroSection(artist: Artist?, tracks: List<Track>, viewModel: MusicView
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = artist?.name ?: "Unknown Artist",
-                    style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.ExtraBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 46.sp,
-                    lineHeight = 52.sp,
-                    maxLines = 1,
-                    modifier = Modifier.basicMarquee()
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            val totalDurationMs = tracks.sumOf { it.durationMs }
-            val hours = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(totalDurationMs)
-            val minutes = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(totalDurationMs) % 60
-            val durationText = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!immersive) {
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                     Text(
-                        text = "${tracks.size} songs",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = artist?.name ?: "Unknown Artist",
+                        style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.ExtraBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 46.sp,
+                        lineHeight = 52.sp,
+                        maxLines = 1,
+                        modifier = Modifier.basicMarquee()
                     )
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                val totalDurationMs = tracks.sumOf { it.durationMs }
+                val hours = java.util.concurrent.TimeUnit.MILLISECONDS.toHours(totalDurationMs)
+                val minutes = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(totalDurationMs) % 60
+                val durationText = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${tracks.size} songs",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = durationText,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Schedule,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = durationText,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                JellyButton(
-                    onClick = { if (tracks.isNotEmpty()) viewModel.setCurrentlyPlaying(tracks.first(), tracks) },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-                    shape = RoundedCornerShape(28.dp)
-                ) {
-                    Icon(imageVector = HugeIcons.Play, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Play", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                }
-                
-                JellyButton(
-                    onClick = { if (tracks.isNotEmpty()) viewModel.setCurrentlyPlaying(tracks.random(), tracks.shuffled()) },
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f), contentColor = MaterialTheme.colorScheme.onSurface),
-                    shape = RoundedCornerShape(28.dp)
-                ) {
-                    Icon(imageVector = HugeIcons.Shuffle, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Shuffle", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    JellyButton(
+                        onClick = { if (tracks.isNotEmpty()) viewModel.setCurrentlyPlaying(tracks.first(), tracks) },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                        shape = RoundedCornerShape(28.dp)
+                    ) {
+                        Icon(imageVector = HugeIcons.Play, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Play", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    JellyButton(
+                        onClick = { if (tracks.isNotEmpty()) viewModel.setCurrentlyPlaying(tracks.random(), tracks.shuffled()) },
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f), contentColor = MaterialTheme.colorScheme.onSurface),
+                        shape = RoundedCornerShape(28.dp)
+                    ) {
+                        Icon(imageVector = HugeIcons.Shuffle, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Shuffle", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -362,7 +485,7 @@ fun ArtistHeroSection(artist: Artist?, tracks: List<Track>, viewModel: MusicView
 }
 
 @Composable
-fun ArtistPopularSection(tracks: List<Track>, viewModel: MusicViewModel, onNavigateToAllTracks: () -> Unit = {}) {
+fun ArtistPopularSection(tracks: List<Track>, viewModel: MusicViewModel, onNavigateToAllTracks: () -> Unit = {}, immersive: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     var displayLimit by remember { androidx.compose.runtime.mutableIntStateOf(5) }
 
@@ -387,14 +510,14 @@ fun ArtistPopularSection(tracks: List<Track>, viewModel: MusicViewModel, onNavig
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(32.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+                    .background(immersiveCardColor(immersive))
                     .animateContentSize(androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
                     .padding(vertical = 12.dp)
             ) {
                 Text(
                     text = "TRACKS",
                     style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = immersiveMutedColor(immersive),
                     modifier = Modifier.padding(start = 72.dp, end = 24.dp, bottom = 16.dp)
                 )
 
@@ -408,6 +531,7 @@ fun ArtistPopularSection(tracks: List<Track>, viewModel: MusicViewModel, onNavig
                         title = track.title, 
                         duration = durString,
                         qualityBadgeResId = track.getQualityBadgeResId(),
+                        immersive = immersive,
                         onClick = { viewModel.setCurrentlyPlaying(track, tracks) }
                     )
                 }
@@ -423,13 +547,13 @@ fun ArtistPopularSection(tracks: List<Track>, viewModel: MusicViewModel, onNavig
                         Text(
                             text = "Show more",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = immersiveMutedColor(immersive)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.ExpandMore,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = immersiveMutedColor(immersive),
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -440,7 +564,7 @@ fun ArtistPopularSection(tracks: List<Track>, viewModel: MusicViewModel, onNavig
 }
 
 @Composable
-fun ArtistTrackItem(number: Int, title: String, duration: String, qualityBadgeResId: Int?, onClick: () -> Unit = {}) {
+fun ArtistTrackItem(number: Int, title: String, duration: String, qualityBadgeResId: Int?, immersive: Boolean = false, onClick: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -452,7 +576,7 @@ fun ArtistTrackItem(number: Int, title: String, duration: String, qualityBadgeRe
             Text(
                 text = number.toString(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                color = immersiveMutedColor(immersive).copy(alpha = if (immersive) 1f else 0.6f)
             )
         }
         Spacer(modifier = Modifier.width(16.dp))
@@ -460,7 +584,7 @@ fun ArtistTrackItem(number: Int, title: String, duration: String, qualityBadgeRe
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurface,
+                color = immersiveTextColor(immersive),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -472,27 +596,27 @@ fun ArtistTrackItem(number: Int, title: String, duration: String, qualityBadgeRe
                 contentDescription = "Quality",
                 modifier = Modifier.height(16.dp),
                 contentScale = ContentScale.Fit,
-                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant)
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(immersiveMutedColor(immersive))
             )
             Spacer(modifier = Modifier.width(12.dp))
         }
         Text(
             text = duration,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            color = immersiveMutedColor(immersive).copy(alpha = if (immersive) 1f else 0.6f)
         )
     }
 }
 
 @Composable
-fun ArtistAlbumsSection(albums: List<Album>, onNavigateToAlbum: (String) -> Unit, onNavigateToAllAlbums: () -> Unit = {}) {
+fun ArtistAlbumsSection(albums: List<Album>, onNavigateToAlbum: (String) -> Unit, onNavigateToAllAlbums: () -> Unit = {}, immersive: Boolean = false) {
     if (albums.isEmpty()) return
     Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(32.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+                .background(immersiveCardColor(immersive))
                 .padding(vertical = 24.dp)
         ) {
             Row(
@@ -505,7 +629,7 @@ fun ArtistAlbumsSection(albums: List<Album>, onNavigateToAlbum: (String) -> Unit
             Text(
                 text = "Albums",
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
+                color = immersiveTextColor(immersive)
             )
         }
         
@@ -523,6 +647,7 @@ modifier = Modifier.physicsBounceOverscroll(isHorizontal = true),
                     title = album.title,
                     year = "${album.trackCount} tracks",
                     imageUrl = album.artworkUri ?: "",
+                    immersive = immersive,
                     onClick = { onNavigateToAlbum(album.id) }
                 )
             }
@@ -532,12 +657,12 @@ modifier = Modifier.physicsBounceOverscroll(isHorizontal = true),
 }
 
 @Composable
-fun ArtistAlbumItem(title: String, year: String, imageUrl: String, onClick: () -> Unit = {}) {
+fun ArtistAlbumItem(title: String, year: String, imageUrl: String, immersive: Boolean = false, onClick: () -> Unit = {}) {
     Column(modifier = Modifier.width(140.dp).jellyClick { onClick() }) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(32.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+                .background(if (immersive) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
                 .padding(8.dp)
         ) {
             AsyncImage(
@@ -554,7 +679,7 @@ fun ArtistAlbumItem(title: String, year: String, imageUrl: String, onClick: () -
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
+            color = immersiveTextColor(immersive),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 4.dp)
@@ -562,7 +687,7 @@ fun ArtistAlbumItem(title: String, year: String, imageUrl: String, onClick: () -
         Text(
             text = year,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = immersiveMutedColor(immersive),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 4.dp)
@@ -571,7 +696,7 @@ fun ArtistAlbumItem(title: String, year: String, imageUrl: String, onClick: () -
 }
 
 @Composable
-fun ArtistAboutSection(artist: Artist?) {
+fun ArtistAboutSection(artist: Artist?, immersive: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     var hasOverflow by remember { mutableStateOf(false) }
     val bio = artist?.bioText ?: "No artist info available yet."
@@ -585,21 +710,21 @@ fun ArtistAboutSection(artist: Artist?) {
         Text(
             text = "About",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
+            color = immersiveTextColor(immersive)
         )
         Spacer(modifier = Modifier.height(16.dp))
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(32.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+                .background(immersiveCardColor(immersive))
                 .animateContentSize(androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
                 .padding(vertical = 12.dp)
         ) {
             Text(
                 text = bio,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = immersiveMutedColor(immersive),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
                 lineHeight = 24.sp,
                 maxLines = if (expanded) Int.MAX_VALUE else 5,
@@ -622,13 +747,13 @@ fun ArtistAboutSection(artist: Artist?) {
                     Text(
                         text = "Show more",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = immersiveMutedColor(immersive)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = Icons.Default.ExpandMore,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = immersiveMutedColor(immersive),
                         modifier = Modifier.size(18.dp)
                     )
                 }

@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +51,16 @@ fun AlbumDetailsScreen(
 
     val isMiniPlayerVisible by viewModel.isMiniPlayerVisible.collectAsState()
     val hasMiniPlayer = isMiniPlayerVisible && currentlyPlaying != null
+
+    val immersiveMode by viewModel.immersiveModeEnabled.collectAsState()
+    val rawImmersiveColor by rememberDominantColor(album?.artworkUri, Color(0xFF211F26))
+    val immersiveColor = remember(rawImmersiveColor) { immersiveBackground(rawImmersiveColor) }
+    val immersiveAccent by rememberVibrantColor(album?.artworkUri, MaterialTheme.colorScheme.secondary, immersiveColor)
+    LaunchedEffect(immersiveMode, immersiveColor) {
+        viewModel.setImmersiveScrimColor(if (immersiveMode) immersiveColor else null)
+    }
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     val bottomPadding by androidx.compose.animation.core.animateDpAsState(
         targetValue = if (hasMiniPlayer) 130.dp else 48.dp,
@@ -104,45 +115,141 @@ fun AlbumDetailsScreen(
     }
 
     if (album == null) {
-        AlbumDetailsSkeleton(onNavigateBack = onNavigateBack)
+        Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+            AlbumDetailsSkeleton(onNavigateBack = onNavigateBack)
+        }
     } else {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (immersiveMode) Modifier.background(immersiveColor)
+                    else Modifier.systemBarsPadding()
+                )
+        ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .physicsBounceOverscroll()
-                    .padding(horizontal = 24.dp),
-                contentPadding = PaddingValues(top = 104.dp, bottom = bottomPadding)
+                    .then(if (immersiveMode) Modifier else Modifier.padding(horizontal = 24.dp)),
+                contentPadding = PaddingValues(
+                    top = if (immersiveMode) 0.dp else 104.dp,
+                    bottom = if (immersiveMode) bottomPadding + bottomInset else bottomPadding
+                )
             ) {
-                item {
-                    AlbumDetailsInfo(
-                        album = album,
-                        tracks = sortedTracks,
-                        onPlay = { viewModel.setCurrentlyPlaying(sortedTracks.firstOrNull(), sortedTracks) },
-                        onShuffle = { 
-                            val shuffled = sortedTracks.shuffled()
-                            viewModel.setCurrentlyPlaying(shuffled.firstOrNull(), shuffled) 
-                        },
-                        onNavigateToArtist = onNavigateToArtist
-                    )
+                if (immersiveMode) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+                            AsyncImage(
+                                model = album?.artworkUri,
+                                contentDescription = "Album Cover",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(260.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(immersiveColor.copy(alpha = 0f), immersiveColor)
+                                        )
+                                    )
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .offset(y = 28.dp)
+                                    .padding(horizontal = 24.dp)
+                                    .fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = album?.title ?: "Unknown Album",
+                                    style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.ExtraBold),
+                                    color = Color.White,
+                                    fontSize = 40.sp,
+                                    lineHeight = 46.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    JellyButton(
+                                        onClick = { viewModel.setCurrentlyPlaying(sortedTracks.firstOrNull(), sortedTracks) },
+                                        modifier = Modifier.weight(1f).height(56.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black, contentColor = Color.White),
+                                        shape = RoundedCornerShape(28.dp)
+                                    ) {
+                                        Icon(imageVector = HugeIcons.Play, contentDescription = null, tint = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Play", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    }
+                                    JellyButton(
+                                        onClick = {
+                                            val shuffled = sortedTracks.shuffled()
+                                            viewModel.setCurrentlyPlaying(shuffled.firstOrNull(), shuffled)
+                                        },
+                                        modifier = Modifier.weight(1f).height(56.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = immersiveAccent, contentColor = Color.White),
+                                        shape = RoundedCornerShape(28.dp)
+                                    ) {
+                                        Icon(imageVector = HugeIcons.Shuffle, contentDescription = null, tint = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Shuffle", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        Spacer(modifier = Modifier.height(52.dp))
+                    }
                 }
                 item {
-                    AlbumTracksList(
-                        tracks = sortedTracks,
-                        currentlyPlaying = currentlyPlaying,
-                        isPlaying = isPlaying,
-                        onTrackClick = { track -> viewModel.setCurrentlyPlaying(track, sortedTracks) }
-                    )
+                    Box(modifier = if (immersiveMode) Modifier.padding(horizontal = 24.dp) else Modifier) {
+                        AlbumDetailsInfo(
+                            album = album,
+                            tracks = sortedTracks,
+                            showArtwork = !immersiveMode,
+                            immersive = immersiveMode,
+                            onPlay = { viewModel.setCurrentlyPlaying(sortedTracks.firstOrNull(), sortedTracks) },
+                            onShuffle = { 
+                                val shuffled = sortedTracks.shuffled()
+                                viewModel.setCurrentlyPlaying(shuffled.firstOrNull(), shuffled) 
+                            },
+                            onNavigateToArtist = onNavigateToArtist
+                        )
+                    }
+                }
+                item {
+                    Box(modifier = if (immersiveMode) Modifier.padding(horizontal = 24.dp) else Modifier) {
+                        AlbumTracksList(
+                            tracks = sortedTracks,
+                            currentlyPlaying = currentlyPlaying,
+                            isPlaying = isPlaying,
+                            immersive = immersiveMode,
+                            onTrackClick = { track -> viewModel.setCurrentlyPlaying(track, sortedTracks) }
+                        )
+                    }
                 }
                 if (filteredMoreAlbums.isNotEmpty()) {
                     item {
-                        Spacer(modifier = Modifier.height(32.dp))
-                        MoreByArtistSection(
-                            artistName = album?.artist ?: "",
-                            albums = filteredMoreAlbums,
-                            onNavigateToArtist = onNavigateToArtist,
-                            onNavigateToAlbum = onNavigateToAlbum
-                        )
+                        Box(modifier = if (immersiveMode) Modifier.padding(horizontal = 24.dp) else Modifier) {
+                            Spacer(modifier = Modifier.height(32.dp))
+                            MoreByArtistSection(
+                                artistName = album?.artist ?: "",
+                                albums = filteredMoreAlbums,
+                                immersive = immersiveMode,
+                                onNavigateToArtist = onNavigateToArtist,
+                                onNavigateToAlbum = onNavigateToAlbum
+                            )
+                        }
                     }
                 }
             }
@@ -150,9 +257,11 @@ fun AlbumDetailsScreen(
             AlbumDetailsHeader(
                 onNavigateBack = onNavigateBack, 
                 menuItems = menuItems,
+                immersive = immersiveMode,
+                accent = immersiveAccent,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 48.dp, start = 24.dp, end = 24.dp)
+                    .padding(top = if (immersiveMode) topInset + 16.dp else 48.dp, start = 24.dp, end = 24.dp)
             )
         }
     }
@@ -162,6 +271,8 @@ fun AlbumDetailsScreen(
 fun AlbumDetailsHeader(
     onNavigateBack: () -> Unit,
     menuItems: List<MorphingMenuItem> = emptyList(),
+    immersive: Boolean = false,
+    accent: Color = Color.White,
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     Row(
@@ -173,31 +284,33 @@ fun AlbumDetailsHeader(
             onClick = onNavigateBack,
             modifier = Modifier
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+                .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
         ) {
             Icon(
                 imageVector = HugeIcons.ArrowLeft,
                 contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface
+                tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
             )
         }
         if (menuItems.isNotEmpty()) {
             MorphingMenu(
                 items = menuItems,
-                buttonBackground = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
-                tint = MaterialTheme.colorScheme.onSurface
+                buttonBackground = if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f),
+                tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface,
+                immersive = immersive,
+                immersiveAccent = accent
             )
         } else {
             JellyIconButton(
                 onClick = { },
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
+                    .background(if (immersive) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.8f))
             ) {
                 Icon(
                     imageVector = HugeIcons.MoreVert,
                     contentDescription = "More",
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = if (immersive) Color.White else MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -208,6 +321,8 @@ fun AlbumDetailsHeader(
 fun AlbumDetailsInfo(
     album: com.aeswox.arcmusic.db.entities.Album?,
     tracks: List<com.aeswox.arcmusic.db.entities.Track>,
+    showArtwork: Boolean = true,
+    immersive: Boolean = false,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     onNavigateToArtist: (String) -> Unit
@@ -221,20 +336,58 @@ fun AlbumDetailsInfo(
     val yearText = album?.year?.takeIf { it > 0 }?.toString() ?: ""
     val subtitleText = listOf(genreText, yearText).filter { it.isNotBlank() }.joinToString(" • ")
 
+    if (immersive) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .jellyClick { onNavigateToArtist(album?.artist ?: "") }
+                    .padding(vertical = 8.dp)
+            ) {
+                Text(
+                    text = album?.artist ?: "Unknown Artist",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.7f)
+                )
+            }
+            if (subtitleText.isNotBlank()) {
+                Text(
+                    text = subtitleText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+        return
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(24.dp))
-        AsyncImage(
-            model = album?.artworkUri,
-            contentDescription = "Album Cover",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(280.dp)
-                .clip(RoundedCornerShape(36.dp))
-        )
-        Spacer(modifier = Modifier.height(32.dp))
+        if (showArtwork) {
+            AsyncImage(
+                model = album?.artworkUri,
+                contentDescription = "Album Cover",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(280.dp)
+                    .clip(RoundedCornerShape(36.dp))
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+        }
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.Start
@@ -368,6 +521,7 @@ fun AlbumTracksList(
     tracks: List<com.aeswox.arcmusic.db.entities.Track>,
     currentlyPlaying: com.aeswox.arcmusic.db.entities.Track?,
     isPlaying: Boolean,
+    immersive: Boolean = false,
     onTrackClick: (com.aeswox.arcmusic.db.entities.Track) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -392,14 +546,14 @@ fun AlbumTracksList(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(32.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f))
+            .background(immersiveCardColor(immersive))
             .animateContentSize(androidx.compose.animation.core.spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessLow))
             .padding(vertical = 12.dp)
     ) {
         Text(
             text = "TRACKS",
             style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = immersiveMutedColor(immersive),
             modifier = Modifier.padding(start = 72.dp, end = 24.dp, bottom = 16.dp)
         )
         
@@ -416,6 +570,7 @@ fun AlbumTracksList(
                 qualityBadgeResId = track.getQualityBadgeResId(),
                 isPlaying = isCurrentTrack && isPlaying,
                 isExplicit = false,
+                immersive = immersive,
                 onClick = { onTrackClick(track) }
             )
         }
@@ -431,13 +586,13 @@ fun AlbumTracksList(
                 Text(
                     text = "Show more",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = immersiveMutedColor(immersive)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Default.ExpandMore,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = immersiveMutedColor(immersive),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -453,13 +608,14 @@ fun AlbumTrackItem(
     qualityBadgeResId: Int? = null,
     isPlaying: Boolean = false,
     isExplicit: Boolean = false,
+    immersive: Boolean = false,
     onClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .jellyClick { onClick() }
-            .background(if (isPlaying) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent)
+            .background(if (isPlaying) (if (immersive) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceContainer) else Color.Transparent)
             .padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -467,15 +623,15 @@ fun AlbumTrackItem(
             if (isPlaying) {
                 // Playing animation placeholder
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom, modifier = Modifier.height(16.dp)) {
-                    Box(modifier = Modifier.width(3.dp).height(8.dp).background(MaterialTheme.colorScheme.primary))
-                    Box(modifier = Modifier.width(3.dp).height(14.dp).background(MaterialTheme.colorScheme.primary))
-                    Box(modifier = Modifier.width(3.dp).height(10.dp).background(MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.width(3.dp).height(8.dp).background(if (immersive) Color.White else MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.width(3.dp).height(14.dp).background(if (immersive) Color.White else MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.width(3.dp).height(10.dp).background(if (immersive) Color.White else MaterialTheme.colorScheme.primary))
                 }
             } else {
                 Text(
                     text = number,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    color = immersiveMutedColor(immersive).copy(alpha = if (immersive) 1f else 0.6f)
                 )
             }
         }
@@ -485,7 +641,7 @@ fun AlbumTrackItem(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium),
-                    color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    color = if (isPlaying) (if (immersive) Color.White else MaterialTheme.colorScheme.primary) else immersiveTextColor(immersive),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -513,14 +669,14 @@ fun AlbumTrackItem(
                 contentDescription = "Quality",
                 modifier = Modifier.height(16.dp),
                 contentScale = ContentScale.Fit,
-                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.onSurfaceVariant)
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(immersiveMutedColor(immersive))
             )
             Spacer(modifier = Modifier.width(12.dp))
         }
         Text(
             text = duration,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            color = immersiveMutedColor(immersive).copy(alpha = if (immersive) 1f else 0.6f)
         )
     }
 }
@@ -530,7 +686,8 @@ fun MoreByArtistSection(
     artistName: String,
     albums: List<com.aeswox.arcmusic.db.entities.Album>,
     onNavigateToArtist: (String) -> Unit,
-    onNavigateToAlbum: (String) -> Unit
+    onNavigateToAlbum: (String) -> Unit,
+    immersive: Boolean = false
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -541,7 +698,7 @@ fun MoreByArtistSection(
             Text(
                 text = "More by $artistName",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
+                color = immersiveTextColor(immersive),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -550,7 +707,7 @@ fun MoreByArtistSection(
             Text(
                 text = "See all",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = immersiveMutedColor(immersive),
                 modifier = Modifier.jellyClick { onNavigateToArtist(artistName) }
             )
         }
@@ -564,6 +721,7 @@ fun MoreByArtistSection(
                     title = album.title, 
                     year = "${album.trackCount} tracks", 
                     imageUrl = album.artworkUri ?: "",
+                    immersive = immersive,
                     onClick = { onNavigateToAlbum(album.id) }
                 )
             }

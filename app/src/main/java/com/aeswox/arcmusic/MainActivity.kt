@@ -368,7 +368,29 @@ class MainActivity : ComponentActivity() {
                     val currentRoute = navBackStackEntry?.destination?.route ?: startDest
                     val showWelcomeOverlay by viewModel.showWelcomeOverlay.collectAsState()
                     val isNavBarVisible = currentRoute == "home" && !isLibrarySelectionMode && currentTab in 0..2 && selectedGenre == null
-                    
+
+                    // Immersive bottom-chrome tint. On artist/album/playlist detail pages with Immersive UI
+                    // enabled, the bottom scrim AND the mini-player glass tint themselves to the page's
+                    // dominant background so the mini-player blends into the page. Animates in sync with the
+                    // page transition (600ms, matching NavTransitions.ENTER_DURATION) as we enter/leave an
+                    // immersive detail route. Non-immersive pages keep the theme background.
+                    val immersiveScrimColor by viewModel.immersiveScrimColor.collectAsState()
+                    val immersiveModeOn by viewModel.immersiveModeEnabled.collectAsState()
+                    val onImmersiveRoute = currentRoute.startsWith("artist_details") ||
+                        currentRoute.startsWith("album_details") ||
+                        currentRoute.startsWith("playlist_details")
+                    val themeScrimColor = MaterialTheme.colorScheme.background
+                    val scrimTarget = if (immersiveModeOn && onImmersiveRoute) {
+                        immersiveScrimColor ?: themeScrimColor
+                    } else {
+                        themeScrimColor
+                    }
+                    val scrimColor by androidx.compose.animation.animateColorAsState(
+                        targetValue = scrimTarget,
+                        animationSpec = tween(durationMillis = 600),
+                        label = "immersiveScrimColor"
+                    )
+
                     LaunchedEffect(isNavBarVisible) {
                         viewModel.setNavBarVisible(isNavBarVisible)
                         if (!isNavBarVisible) {
@@ -435,6 +457,8 @@ class MainActivity : ComponentActivity() {
                                                 hazeState = hazeState, 
                                                 tintTransparency = tintTransparency, 
                                                 noiseFactor = noiseFactor, 
+                                                immersive = immersiveModeOn && onImmersiveRoute,
+                                                immersiveBg = scrimColor,
                                                 isPlaying = isPlaying,
                                                 onPlayPauseClick = { viewModel.togglePlayPause() },
                                                 onSkipNextClick = { viewModel.skipToNext() },
@@ -746,7 +770,7 @@ class MainActivity : ComponentActivity() {
                             popExitTransition = { NavTransitions.DetailPopExit }
                         ) { backStackEntry ->
                             val artistId = backStackEntry.arguments?.getString("artistId") ?: return@composable
-                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                            Box(modifier = Modifier.fillMaxSize()) {
                                 ArtistDetailsScreen(
                                     artistId = artistId,
                                     onNavigateBack = { navController.popBackStack() },
@@ -799,7 +823,7 @@ class MainActivity : ComponentActivity() {
                             popExitTransition = { NavTransitions.DetailPopExit }
                         ) { backStackEntry ->
                             val albumId = backStackEntry.arguments?.getString("albumId") ?: return@composable
-                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                            Box(modifier = Modifier.fillMaxSize()) {
                                 AlbumDetailsScreen(
                                     albumId = albumId,
                                     onNavigateBack = { navController.popBackStack() },
@@ -818,7 +842,7 @@ class MainActivity : ComponentActivity() {
                             popExitTransition = { NavTransitions.DetailPopExit }
                         ) { backStackEntry ->
                             val playlistId = backStackEntry.arguments?.getString("playlistId") ?: return@composable
-                            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                            Box(modifier = Modifier.fillMaxSize()) {
                                 PlaylistDetailsScreen(
                                     playlistId = playlistId,
                                     onNavigateBack = { navController.popBackStack() },
@@ -1226,7 +1250,8 @@ class MainActivity : ComponentActivity() {
                                         BottomChromeGradient(
                                             height = animGradientHeight,
                                             alpha = gradientAlpha,
-                                            modifier = Modifier.align(Alignment.BottomCenter)
+                                            modifier = Modifier.align(Alignment.BottomCenter),
+                                            colorOverride = scrimColor
                                         )
 
                                         // â”€â”€ Navigation bar (animated show/hide) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -3486,7 +3511,7 @@ modifier = Modifier.physicsBounceOverscroll(isHorizontal = true),
 
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-fun AlbumResultItem(title: String, year: String, imageUrl: Any?, modifier: Modifier = Modifier.width(140.dp), isSelectionMode: Boolean = false, isSelected: Boolean = false, onLongClick: (() -> Unit)? = null, onClick: () -> Unit = {}) {
+fun AlbumResultItem(title: String, year: String, imageUrl: Any?, modifier: Modifier = Modifier.width(140.dp), isSelectionMode: Boolean = false, isSelected: Boolean = false, onLongClick: (() -> Unit)? = null, onClick: () -> Unit = {}, immersive: Boolean = false) {
     Column(
         modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
@@ -3525,14 +3550,14 @@ fun AlbumResultItem(title: String, year: String, imageUrl: Any?, modifier: Modif
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (immersive) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
         Text(
             text = year,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (immersive) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
