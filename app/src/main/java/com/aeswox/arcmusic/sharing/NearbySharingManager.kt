@@ -129,7 +129,10 @@ class NearbySharingManager @Inject constructor(
         if (!passiveListeningRequested || activeEndpointId != null ||
             _sharingState.value == SharingState.CONNECTED ||
             _sharingState.value == SharingState.TRANSFERRING ||
-            (passiveListeningShowsState && _sharingState.value == SharingState.COMPLETED)) return
+            // Always block re-entry on COMPLETED regardless of showState — without this, the passive
+            // session restarts before the previous Nearby session finishes tearing down, causing a
+            // silent ALREADY_ADVERTISING / ALREADY_DISCOVERING failure on the next tap.
+            _sharingState.value == SharingState.COMPLETED) return
         if ((passiveAdvertising && passiveDiscovering) || passiveSessionStarting) return
 
         // Start both sides before waiting for callbacks; a failure in either side retries the pair.
@@ -169,9 +172,13 @@ class NearbySharingManager @Inject constructor(
     
     fun connectViaNfcToken(token: String) {
         expectedNfcToken = token
-        
-        // Check if we already discovered it before the tap happened
-        val match = discoveredNfcTokens.entries.find { it.value == token }
+
+        // Only match against endpoints that are currently live in the discovery list.
+        // discoveredNfcTokens is intentionally not cleared on session restart (Fix 2), so it can
+        // hold entries from a previous Nearby session whose endpoint IDs are no longer valid.
+        // Cross-referencing with _discoveredEndpoints filters those stale entries out.
+        val activeIds = _discoveredEndpoints.value.map { it.id }.toSet()
+        val match = discoveredNfcTokens.entries.find { it.key in activeIds && it.value == token }
         if (match != null) {
             requestConnection(match.key)
         }
@@ -413,13 +420,17 @@ class NearbySharingManager @Inject constructor(
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             pendingEndpointId = null
             if (result.status.isSuccess) {
+                // Token has served its purpose — clear it now that we're connected.
+                // Deliberately NOT cleared in requestConnection() so that a failed attempt
+                // leaves expectedNfcToken intact for onEndpointFound to auto-retry.
+                expectedNfcToken = null
                 activeEndpointId = endpointId
                 _sharingState.value = SharingState.CONNECTED
                 passiveAdvertising = false
                 passiveDiscovering = false
                 stopDiscovery()
                 stopAdvertising()
-                
+
                 // If we have a payload to send, start preparing and sending it
                 currentPayload?.let { payload ->
                     sendPayloadPackage(endpointId, payload)
@@ -434,15 +445,27 @@ class NearbySharingManager @Inject constructor(
 
         override fun onDisconnected(endpointId: String) {
             if (pendingEndpointId == endpointId) pendingEndpointId = null
+            isInitiator = false
             if (_sharingState.value != SharingState.COMPLETED) {
                 _sharingState.value = SharingState.IDLE
                 _transferProgress.value = 0f
                 _isReceiving.value = false
                 updateTransferService(SharingState.IDLE)
                 activeEndpointId = null
+                ensurePassiveListening()
+            } else {
+                // Transfer completed — leave state as COMPLETED so the UI completion card stays
+                // visible, then resume passive listening after a short grace period.
+                // ensurePassiveListening() would be blocked on COMPLETED immediately, so we
+                // schedule it after clearing the state ourselves.
+                coroutineScope.launch {
+                    delay(3_000)
+                    if (_sharingState.value == SharingState.COMPLETED) {
+                        _sharingState.value = SharingState.IDLE
+                    }
+                    ensurePassiveListening()
+                }
             }
-            isInitiator = false
-            ensurePassiveListening()
         }
     }
 
@@ -643,13 +666,17 @@ class NearbySharingManager @Inject constructor(
         connectionsClient.startAdvertising(
             nameToAdvertise, serviceId, connectionLifecycleCallback, advertisingOptions
         ).addOnSuccessListener {
-            if (nfcToken == null && !updateState) passiveAdvertising = true
+            // Mark passive slot as filled whether this is a tokenless passive ad OR a token-bearing
+            // ShareScreen ad. Without this, ensurePassiveListening sees passiveAdvertising==false
+            // and restarts advertising without the token, stripping it from the endpoint name and
+            // breaking the auto-accept handshake on the receiver side.
+            if (!updateState || nfcToken != null) passiveAdvertising = true
             if (!updateState && passiveDiscovering) passiveSessionStarting = false
-            if (updateState) _sharingState.value = SharingState.ADVERTISING
+            if (updateState && nfcToken == null) _sharingState.value = SharingState.ADVERTISING
         }.addOnFailureListener {
-            if (nfcToken == null && !updateState) passiveAdvertising = false
+            if (!updateState || nfcToken != null) passiveAdvertising = false
             if (!updateState) passiveSessionStarting = false
-            if (updateState) _sharingState.value = SharingState.ERROR
+            if (updateState && nfcToken == null) _sharingState.value = SharingState.ERROR
             Log.e("NearbySharingManager", "Failed to start advertising", it)
         }
     }
@@ -664,7 +691,9 @@ class NearbySharingManager @Inject constructor(
 
     fun startDiscovery(updateState: Boolean = true) {
         _discoveredEndpoints.value = emptyList()
-        discoveredNfcTokens.clear()
+        // Do NOT clear discoveredNfcTokens here — the cache must survive passive-session restarts
+        // so that an NFC tap can immediately match a pre-discovered endpoint instead of waiting
+        // for Nearby to rediscover it (which takes 10-20 s). Entries are evicted in onEndpointLost.
         val discoveryOptions = DiscoveryOptions.Builder().setStrategy(strategy).build()
         connectionsClient.startDiscovery(
             serviceId, endpointDiscoveryCallback, discoveryOptions
@@ -695,7 +724,7 @@ class NearbySharingManager @Inject constructor(
         // Stop discovery once the NFC token resolves to a peer; keep advertising for the peer's request.
         stopDiscovery()
         isInitiator = true
-        // If we are connecting via an NFC token, send it back in our name so the sender can auto-accept
+        // Send the NFC token back in our name so the sender can auto-accept without a dialog.
         val nameToSend = if (expectedNfcToken != null) "$userName|$expectedNfcToken" else userName
         connectionsClient.requestConnection(nameToSend, endpointId, connectionLifecycleCallback)
             .addOnFailureListener {
@@ -704,7 +733,9 @@ class NearbySharingManager @Inject constructor(
                 Log.e("NearbySharingManager", "Failed to request connection", it)
                 ensurePassiveListening()
             }
-        expectedNfcToken = null
+        // Do NOT clear expectedNfcToken here. If this attempt fails, ensurePassiveListening will
+        // restart discovery and onEndpointFound will auto-retry when the sender is re-discovered.
+        // expectedNfcToken is cleared in onConnectionResult(success) instead.
     }
 
     fun acceptConnection(endpointId: String) {

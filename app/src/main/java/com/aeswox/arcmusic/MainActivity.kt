@@ -4,6 +4,7 @@ import com.aeswox.arcmusic.sharing.ReceiveScreen
 import com.aeswox.arcmusic.sharing.ShareScreen
 import com.aeswox.arcmusic.sharing.NfcShareService
 import com.aeswox.arcmusic.sharing.NearbySharingManager
+import com.aeswox.arcmusic.sharing.SharingState
 import com.aeswox.arcmusic.sharing.hasNearbyConnectionPermissions
 import com.aeswox.arcmusic.db.entities.getQualityBadgeResId
 import com.aeswox.arcmusic.ui.animations.physicsBounceOverscroll
@@ -213,8 +214,13 @@ class MainActivity : ComponentActivity() {
     ) {
         if (sendScreenActive && !isSendScreen) {
             NfcShareService.currentToken = null
-            nearbySharingManager.stopAdvertising()
-            nearbySharingManager.stopDiscovery()
+            // Guard against killing a connection that's already in flight (e.g., NFC handshake
+            // was triggered and the user navigated away before onConnectionResult fired).
+            val state = nearbySharingManager.sharingState.value
+            if (state != SharingState.CONNECTED && state != SharingState.TRANSFERRING) {
+                nearbySharingManager.stopAdvertising()
+                nearbySharingManager.stopDiscovery()
+            }
             sendNearbySessionActive = false
         }
         sendScreenActive = isSendScreen
@@ -262,7 +268,10 @@ class MainActivity : ComponentActivity() {
         if (sendScreenActive) {
             nearbySharingManager.setPassiveListening(false, showState = false)
             if (shouldRunNearby && !sendNearbySessionActive) {
-                nearbySharingManager.startAdvertising()
+                // Do NOT call startAdvertising() here. ShareScreen's onNfcTokenChanged owns
+                // advertising on the send screen (with or without an NFC token). Calling
+                // startAdvertising() here too causes an ALREADY_ADVERTISING race when both
+                // submit their async calls to Nearby in the same composition cycle.
                 nearbySharingManager.startDiscovery()
                 sendNearbySessionActive = true
             } else if (!shouldRunNearby && sendNearbySessionActive) {

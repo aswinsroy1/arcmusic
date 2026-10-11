@@ -332,7 +332,12 @@ class ShareViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        nearbySharingManager.stopDiscovery()
-        nearbySharingManager.stopAdvertising()
+        // Don't tear down an in-flight handshake or active transfer — if the user navigates away
+        // while the NFC tap is being resolved, killing advertising here would bounce the connection.
+        val state = nearbySharingManager.sharingState.value
+        if (state != SharingState.CONNECTED && state != SharingState.TRANSFERRING) {
+            nearbySharingManager.stopDiscovery()
+            nearbySharingManager.stopAdvertising()
+        }
     }
 }
